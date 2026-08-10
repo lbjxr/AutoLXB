@@ -139,6 +139,3 @@ AutoLXB 自行实现了 Wireless ADB 配对、连接与启动流程，运行时�
 
 MIT，见 [LICENSE](LICENSE)。
 
-## Star 趋势
-
-[![Star History Chart](https://api.star-history.com/svg?repos=wuwei-crg/AutoLXB&type=Date)](https://star-history.com/#wuwei-crg/AutoLXB&Date)
