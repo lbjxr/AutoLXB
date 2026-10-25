@@ -151,7 +151,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.emptyFlow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -295,7 +294,7 @@ fun LXBIgnitionApp(
     viewModel: MainViewModel = viewModel(),
     onOpenDeveloperOptionsSettings: () -> Unit = {},
     onOpenWirelessDebuggingSettings: () -> Unit = {},
-    activitySnackbarEvents: SharedFlow<ActivitySnackbarEvent> = emptyFlow(),
+    activitySnackbarEvents: SharedFlow<ActivitySnackbarEvent> = MutableSharedFlow(),
 ) {
     // Batch 7: top-level tabs are driven by a NavController + NavHost
     // (routes in ui/navigation/TopNavRoutes.kt) instead of the former

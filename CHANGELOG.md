@@ -111,6 +111,25 @@
 - 版本保持 0.9.0 / versionCode 900 不变；本批之后由维护者把
   `release/v0.9.0` 分支从本批提交上冻结。
 
+### 第六批（编译修复；此前三批代码未经编译，本批把手动编译管线发现的 3 处错误修进仓库）
+
+- `MainActivity.kt`：`LXBIgnitionApp` 的
+  `activitySnackbarEvents` 参数默认值由 `emptyFlow()` 改为
+  `MutableSharedFlow()`——`emptyFlow()` 返回 `Flow`，不能赋给
+  `SharedFlow` 参数，是类型错误；同时删掉因此无用的
+  `emptyFlow` 导入。行为不变（默认仍不产生任何事件，唯一
+  调用点本来就传入 Activity 自有的事件流）。
+- `ui/i18n/UiI18n.kt`：`"Semantic descriptor" to "语义描述"`
+  行尾补逗号（此前缺逗号，是语法错误）。
+- `ui/components/UiComponents.kt`：`glyphToIcon` 里 "⏰" 的
+  映射由 `Icons.Filled.Schedule` 改为 `Icons.Filled.Alarm`——
+  Schedule 只在 material-icons-extended 里，不在已声明的
+  material-icons-core 里；Alarm 在 core 里，且与 ⏰（闹钟）
+  的语义相符，不引入 extended 依赖（可省约 35MB 包体）。
+- 版本保持 0.9.0 / versionCode 900 不变；本批之后用手动
+  编译管线（aapt2 + kotlinc + d8 + apksigner）从仓库干净
+  源码重打 debug APK 验证。
+
 ### 明确未做（本批有意不做，留待后续决策/验证）
 
 - 顶层 NavHost 已于第五批落地（只覆盖底部 4 个 Tab；各 Tab

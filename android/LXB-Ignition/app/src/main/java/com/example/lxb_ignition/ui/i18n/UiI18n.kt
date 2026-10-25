@@ -667,7 +667,7 @@ val ZhMap = mapOf(
     "Container probe" to "容器探测",
     "Adaptation status" to "适配状态",
     "Adaptation error" to "适配错误",
-    "Semantic descriptor" to "语义描述"
+    "Semantic descriptor" to "语义描述",
     // Batch 3 (v0.9.0): coverage completion. These keys were reachable
     // through tr() but had no Chinese entry, so Chinese users saw the
     // English original. "Core" follows the existing "Core 已连接" style;

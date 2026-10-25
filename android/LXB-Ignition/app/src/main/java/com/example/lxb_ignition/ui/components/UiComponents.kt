@@ -70,7 +70,7 @@ fun glyphToIcon(glyph: String): ImageVector = when (glyph) {
     "↳", "➜", "☞" -> Icons.Filled.KeyboardArrowRight
     "⇄", "↺", "⌁", "☁", "∞" -> Icons.Filled.Refresh
     "⌨" -> Icons.Filled.Edit
-    "⏰" -> Icons.Filled.Schedule
+    "⏰" -> Icons.Filled.Alarm
     "✉" -> Icons.Filled.Email
     "⚡" -> Icons.Filled.PlayArrow
     "✦", "★" -> Icons.Filled.Star

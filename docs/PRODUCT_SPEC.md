@@ -274,3 +274,19 @@
 - 版本保持 0.9.0 / versionCode 900 不变；本批之后
   `release/v0.9.0` 分支从本批提交上冻结，见
   `docs/RELEASE_v0.9.0.md`。
+
+## 15. v0.9.0 第六批范围（编译修复；手动编译管线发现的错误）
+
+- 背景：此前各批代码从未经编译；手动编译管线（aapt2 +
+  kotlinc + d8 + apksigner，不走 Gradle）首次完整编译时
+  发现以下 3 处错误，本批只修这 3 处，不改行为、不加功能。
+- `activitySnackbarEvents` 默认值：`emptyFlow()` 改为
+  `MutableSharedFlow()`（类型错误，见 CHANGELOG 第六批）。
+- ZhMap 缺逗号：`"Semantic descriptor"` 条目行尾补逗号。
+- 图标归属：`glyphToIcon` 的 "⏰" 由 `Icons.Filled.Schedule`
+  改为 `Icons.Filled.Alarm`。原则：只用 material-icons-core
+  里的图标；需要 extended 才有的图标时，优先换成 core 里
+  语义相近的图标，不默认引入 extended 依赖。
+- 版本保持 0.9.0 / versionCode 900 不变；本批之后从仓库
+  干净源码重打 debug APK，作为本版第一份与源码完全对得
+  上的安装包。
