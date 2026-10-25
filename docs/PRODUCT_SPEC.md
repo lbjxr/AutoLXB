@@ -128,3 +128,30 @@
 前置 gate（缺一不可）：在 daemon 正常的机器上 `./gradlew assembleDebug`
 通过；真机走“配模型 → 启动核心 → 快速任务 → 存模板 → 定时工作流”
 主线通过。只有 gate 通过后，才在 v0.9.0 里动这两项。
+
+## 10. v0.9.0 第一批范围（已落地，开发中 beta）
+
+- Tasks 返回栈（可验证方案，非完整 NavHost）：新增纯逻辑
+  `ui/navigation/TaskNavStack.kt`（压栈、弹栈、回首页、按页回退、
+  重复压入同一页的保护）配 JUnit 测试；TasksTab 内全部
+  `page = …` 直接赋值改为压栈/弹栈/按页回退，`PageHeaderBlock`
+  的返回与系统返回键（BackHandler）统一走弹栈，栈底（任务首页）
+  时不拦截、交还系统。例外与取舍：模板表单从工作流步骤打开时，
+  返回按栈回到工作流表单（旧行为是硬编码回模板列表，这是栈语义
+  本身带来的改进）；路线编辑器的旧“非模板来源回首页”分支已被
+  弹栈取代（当前代码中编辑器只从模板入口打开，该分支不可达）；
+  模板/工作流表单保存成功后按页回退到列表（列表不在栈上时重置
+  为首页 → 列表，保存后返回不再回到刚保存的表单）。
+- 文案覆盖补齐（不是迁移）：`docs/check_tr_coverage.py` 抽取
+  MainActivity.kt 全部 `tr("…")` 字面量并与 ZhMap 对照，补齐 16 项
+  （13 项字面量 + 触发器类型 `None`/`Schedule` + 任务状态
+  `PENDING`），补齐后缺失数为 0。`tr()`/ZhMap 机制本身未动，已有
+  翻译未动；不迁移到 `stringResource`，因为应用语言 `uiLang` 可在
+  配置页改，与系统语言不完全等同，迁移会破坏用户的语言选择。
+- 版本：`versionCode` 800 → 900、`versionName` "0.8.0" → "0.9.0"。
+- 本批有意未做：表单未保存内容的草稿保存与“未保存离开”二次确认
+  （返回时表单内容仍按原有行为处理，是否加是下一批决策点）；
+  `DeleteConfirmDialog` / `EmptyStateBox` 抽到 `ui/components/`（两者
+  依赖 MainActivity 私有的 `tr()` / `LocalUiI18n` / `GlyphBadge`，
+  抽取必须改签名或复制语言 plumbing，待有编译 gate 的批次再做）；
+  完整 NavHost 重构（仍列为后续项，见 §9）。

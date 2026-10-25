@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -125,6 +126,7 @@ import com.example.lxb_ignition.model.TraceMetaItem
 import com.example.lxb_ignition.model.UnifiedLogEntry
 import com.example.lxb_ignition.model.TaskRuntimeUiStatus
 import com.example.lxb_ignition.model.WirelessBootstrapStatus
+import com.example.lxb_ignition.ui.navigation.TaskNavStack
 import com.example.lxb_ignition.ui.theme.LXBIgnitionTheme
 import com.example.lxb_ignition.ui.validation.FormField
 import com.example.lxb_ignition.ui.validation.validateTemplateForm
@@ -2431,6 +2433,27 @@ private val ZhMap = mapOf(
     "Adaptation status" to "适配状态",
     "Adaptation error" to "适配错误",
     "Semantic descriptor" to "语义描述"
+    // Batch 3 (v0.9.0): coverage completion. These keys were reachable
+    // through tr() but had no Chinese entry, so Chinese users saw the
+    // English original. "Core" follows the existing "Core 已连接" style;
+    // "None"/"Schedule" are the capitalised trigger-type chip labels;
+    // "PENDING" is a real TaskState enum value from lxb-core.
+    "Core" to "核心",
+    "Exporting logs..." to "正在导出日志...",
+    "Fields" to "字段",
+    "Inspect app startup logs and live core traces, then export both together for debugging." to "查看应用启动日志和实时核心追踪，然后一起导出用于排查问题。",
+    "Latest app logs stay at the bottom." to "最新应用日志会停留在底部。",
+    "Latest core traces stay at the bottom. Scroll upward to load older ones." to "最新核心追踪会停留在底部，向上滚动即可加载更早记录。",
+    "Level" to "级别",
+    "Log Details" to "日志详情",
+    "Log export failed" to "日志导出失败",
+    "Logs exported" to "日志已导出",
+    "No app logs yet." to "暂无应用日志。",
+    "No logs to export." to "没有可导出的日志。",
+    "Type one task and run it directly on this page." to "输入一个任务，直接在本页运行。",
+    "None" to "手动",
+    "Schedule" to "定时触发",
+    "PENDING" to "等待中",
 )
 
 private data class RouteEditorTarget(
@@ -2476,7 +2499,17 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val workflowNotifyActiveTimeEnd by viewModel.workflowNotifyActiveTimeEnd.collectAsState()
     val workflowNotifyLlmConditionEnabled by viewModel.workflowNotifyLlmConditionEnabled.collectAsState()
     val workflowNotifyLlmCondition by viewModel.workflowNotifyLlmCondition.collectAsState()
-    var page by rememberSaveable { mutableIntStateOf(TASKS_PAGE_HOME) }
+    var taskNavPages by rememberSaveable { mutableStateOf(listOf(TASKS_PAGE_HOME)) }
+    // Batch 3: the Tasks back stack. `page` below is derived from the
+    // stack top; forward moves push, Back pops, Save pops back to (or
+    // resets to) its list. Form contents live in the ViewModel, so
+    // popping does not discard them; unsaved-form draft saving and a
+    // leave-without-saving confirm are explicitly next-batch decisions.
+    val taskNav = TaskNavStack(taskNavPages)
+    val page = taskNav.current
+    fun goToTasksPage(target: Int) { taskNavPages = taskNav.push(target).pages }
+    fun goBackTasksPage() { taskNavPages = taskNav.pop(TASKS_PAGE_HOME).pages }
+    fun goBackToTasksPage(target: Int) { taskNavPages = taskNav.popToOrReset(target, TASKS_PAGE_HOME).pages }
     var selectedTask by remember { mutableStateOf<TaskSummary?>(null) }
     var routeEditorTarget by remember { mutableStateOf<RouteEditorTarget?>(null) }
     var portableNotice by remember { mutableStateOf<String?>(null) }
@@ -2490,8 +2523,8 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 uri = uri
             ) { importedType, _ ->
                 when (importedType) {
-                    "workflow" -> page = TASKS_PAGE_WORKFLOW_FORM
-                    "template" -> page = TASKS_PAGE_TEMPLATE_FORM
+                    "workflow" -> goToTasksPage(TASKS_PAGE_WORKFLOW_FORM)
+                    "template" -> goToTasksPage(TASKS_PAGE_TEMPLATE_FORM)
                 }
                 viewModel.refreshTemplateListOnDevice(silent = true)
                 viewModel.refreshWorkflowListOnDevice(silent = true)
@@ -2529,6 +2562,15 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         }
     }
 
+    // Batch 3: system Back pops the Tasks stack. At the Tasks home page
+    // this handler is disabled, so Back keeps its old behaviour (the
+    // system handles it, i.e. leaving the app). Dialogs shown above
+    // TasksTab (task detail, pickers, delete confirms) consume Back
+    // themselves before this handler runs.
+    BackHandler(enabled = taskNav.canGoBack(TASKS_PAGE_HOME)) {
+        taskNavPages = taskNav.pop(TASKS_PAGE_HOME).pages
+    }
+
     when (page) {
         TASKS_PAGE_HOME -> {
             Column(
@@ -2560,9 +2602,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 )
 
                 TaskSessionCard(viewModel = viewModel)
-                CompactEntryRow(title = tr("Templates"), meta = "${templates.size} ${tr("items")}", onClick = { page = TASKS_PAGE_TEMPLATE_LIST })
-                CompactEntryRow(title = tr("Workflows"), meta = "${workflows.size} ${tr("items")}", onClick = { page = TASKS_PAGE_WORKFLOW_LIST })
-                CompactEntryRow(title = tr("Recent Runs"), meta = "${tasks.size} ${tr("items")}", onClick = { page = TASKS_PAGE_RECENT_RUNS })
+                CompactEntryRow(title = tr("Templates"), meta = "${templates.size} ${tr("items")}", onClick = { goToTasksPage(TASKS_PAGE_TEMPLATE_LIST) })
+                CompactEntryRow(title = tr("Workflows"), meta = "${workflows.size} ${tr("items")}", onClick = { goToTasksPage(TASKS_PAGE_WORKFLOW_LIST) })
+                CompactEntryRow(title = tr("Recent Runs"), meta = "${tasks.size} ${tr("items")}", onClick = { goToTasksPage(TASKS_PAGE_RECENT_RUNS) })
                 OutlinedButton(
                     onClick = { portableImportLauncher.launch(arrayOf("application/json", "text/plain")) },
                     modifier = Modifier.fillMaxWidth()
@@ -2584,12 +2626,12 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Templates"),
                     subtitle = tr("Author reusable task templates and their primary routes."),
                     glyph = "▣",
-                    onBack = { page = TASKS_PAGE_HOME },
+                    onBack = { goBackTasksPage() },
                     primaryActionLabel = tr("New"),
                     onPrimaryAction = {
                         viewModel.resetTemplateForm()
                         templateAttemptedSave = false
-                        page = TASKS_PAGE_TEMPLATE_FORM
+                        goToTasksPage(TASKS_PAGE_TEMPLATE_FORM)
                     },
                     secondaryActionLabel = tr("Refresh"),
                     onSecondaryAction = { viewModel.refreshTemplateListOnDevice() }
@@ -2612,7 +2654,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             onAction = {
                                 viewModel.resetTemplateForm()
                                 templateAttemptedSave = false
-                                page = TASKS_PAGE_TEMPLATE_FORM
+                                goToTasksPage(TASKS_PAGE_TEMPLATE_FORM)
                             }
                         )
                     } else {
@@ -2624,7 +2666,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     onEdit = {
                                         viewModel.loadTemplateForm(template)
                                         templateAttemptedSave = false
-                                        page = TASKS_PAGE_TEMPLATE_FORM
+                                        goToTasksPage(TASKS_PAGE_TEMPLATE_FORM)
                                     },
                                     onRoute = {
                                         routeEditorTarget = RouteEditorTarget(
@@ -2636,7 +2678,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                             userPlaybook = template.userPlaybook,
                                             mode = template.taskMapMode
                                         )
-                                        page = TASKS_PAGE_ROUTE_EDITOR
+                                        goToTasksPage(TASKS_PAGE_ROUTE_EDITOR)
                                     },
                                     onDelete = { viewModel.deleteTemplateOnDevice(template.templateId) }
                                 )
@@ -2671,7 +2713,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     glyph = "▣",
                     onBack = {
                         templateAttemptedSave = false
-                        page = TASKS_PAGE_TEMPLATE_LIST
+                        goBackTasksPage()
                     },
                     primaryActionLabel = tr("Save"),
                     onPrimaryAction = {
@@ -2679,7 +2721,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         if (validateTemplateForm(templateName, templateDescription, templatePackage).isEmpty()) {
                             viewModel.saveTemplateOnDevice()
                             templateAttemptedSave = false
-                            page = TASKS_PAGE_TEMPLATE_LIST
+                            goBackToTasksPage(TASKS_PAGE_TEMPLATE_LIST)
                         }
                     },
                     secondaryActionLabel = tr("Export Template"),
@@ -2768,7 +2810,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             userPlaybook = templatePlaybook,
                             mode = templateTaskMapMode
                         )
-                        page = TASKS_PAGE_ROUTE_EDITOR
+                        goToTasksPage(TASKS_PAGE_ROUTE_EDITOR)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -2799,12 +2841,12 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Workflows"),
                     subtitle = tr("Sequence templates and attach one optional trigger."),
                     glyph = "↳",
-                    onBack = { page = TASKS_PAGE_HOME },
+                    onBack = { goBackTasksPage() },
                     primaryActionLabel = tr("New"),
                     onPrimaryAction = {
                         viewModel.resetWorkflowForm()
                         workflowAttemptedSave = false
-                        page = TASKS_PAGE_WORKFLOW_FORM
+                        goToTasksPage(TASKS_PAGE_WORKFLOW_FORM)
                     },
                     secondaryActionLabel = tr("Refresh"),
                     onSecondaryAction = { viewModel.refreshWorkflowListOnDevice() }
@@ -2827,7 +2869,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             onAction = {
                                 viewModel.resetWorkflowForm()
                                 workflowAttemptedSave = false
-                                page = TASKS_PAGE_WORKFLOW_FORM
+                                goToTasksPage(TASKS_PAGE_WORKFLOW_FORM)
                             }
                         )
                     } else {
@@ -2839,7 +2881,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     onEdit = {
                                         viewModel.loadWorkflowForm(workflow)
                                         workflowAttemptedSave = false
-                                        page = TASKS_PAGE_WORKFLOW_FORM
+                                        goToTasksPage(TASKS_PAGE_WORKFLOW_FORM)
                                     },
                                     onToggleEnabled = { checked -> viewModel.toggleWorkflowTriggerEnabledOnDevice(workflow, checked) },
                                     onDelete = { viewModel.deleteWorkflowOnDevice(workflow.workflowId) }
@@ -2872,7 +2914,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     glyph = "↳",
                     onBack = {
                         workflowAttemptedSave = false
-                        page = TASKS_PAGE_WORKFLOW_LIST
+                        goBackTasksPage()
                     },
                     primaryActionLabel = tr("Save"),
                     onPrimaryAction = {
@@ -2880,7 +2922,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         if (validateWorkflowForm(workflowName, workflowStepTemplateIds.size).isEmpty()) {
                             viewModel.saveWorkflowOnDevice()
                             workflowAttemptedSave = false
-                            page = TASKS_PAGE_WORKFLOW_LIST
+                            goBackToTasksPage(TASKS_PAGE_WORKFLOW_LIST)
                         }
                     },
                     secondaryActionLabel = tr("Export Workflow"),
@@ -2929,7 +2971,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         title = tr("No steps yet."),
                         detail = tr("Add a template to start building this workflow."),
                         actionLabel = tr("Add template"),
-                        onAction = { page = TASKS_PAGE_TEMPLATE_PICKER }
+                        onAction = { goToTasksPage(TASKS_PAGE_TEMPLATE_PICKER) }
                     )
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2943,7 +2985,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     template?.let {
                                         viewModel.loadTemplateForm(it)
                                         templateAttemptedSave = false
-                                        page = TASKS_PAGE_TEMPLATE_FORM
+                                        goToTasksPage(TASKS_PAGE_TEMPLATE_FORM)
                                     }
                                 },
                                 onMoveUp = { viewModel.moveWorkflowStepUp(index) },
@@ -2954,7 +2996,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     }
                 }
                 OutlinedButton(
-                    onClick = { page = TASKS_PAGE_TEMPLATE_PICKER },
+                    onClick = { goToTasksPage(TASKS_PAGE_TEMPLATE_PICKER) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(tr("Add step"))
@@ -3018,7 +3060,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Select template"),
                     subtitle = tr("Choose an existing template to add to this workflow."),
                     glyph = "▣",
-                    onBack = { page = TASKS_PAGE_WORKFLOW_FORM }
+                    onBack = { goBackTasksPage() }
                 )
                 SurfacePanel(
                     modifier = Modifier
@@ -3034,7 +3076,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 meta = template.packageName.ifBlank { tr("No app") },
                                 onClick = {
                                     viewModel.addWorkflowStepTemplate(template.templateId)
-                                    page = TASKS_PAGE_WORKFLOW_FORM
+                                    goBackTasksPage()
                                 }
                             )
                             if (index < templates.lastIndex) {
@@ -3058,7 +3100,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Recent Runs"),
                     subtitle = tr("Review what just ran, what failed, and what route data was captured."),
                     glyph = "☰",
-                    onBack = { page = TASKS_PAGE_HOME },
+                    onBack = { goBackTasksPage() },
                     primaryActionLabel = tr("Refresh"),
                     onPrimaryAction = { viewModel.refreshTaskListOnDevice() }
                 )
@@ -3086,7 +3128,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             title = tr("No runs yet."),
                             detail = tr("Submit a quick task, or wait for a workflow trigger to fire."),
                             actionLabel = tr("Submit a quick task"),
-                            onAction = { page = TASKS_PAGE_HOME }
+                            onAction = { goBackToTasksPage(TASKS_PAGE_HOME) }
                         )
                     } else {
                         LazyColumn(
@@ -3129,7 +3171,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(onClick = { page = TASKS_PAGE_HOME }) {
+                    OutlinedButton(onClick = { goBackToTasksPage(TASKS_PAGE_HOME) }) {
                         Text(tr("Back"))
                     }
                     Text(
@@ -3144,12 +3186,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     routeDetail = taskMapDetail,
                     loading = taskMapDetailLoading,
                     saving = taskMapSaving,
-                    onBack = {
-                        page = when (target.source) {
-                            "template" -> TASKS_PAGE_TEMPLATE_FORM
-                            else -> TASKS_PAGE_HOME
-                        }
-                    },
+                    onBack = { goBackTasksPage() },
                     onRefresh = {
                         viewModel.loadTaskMapDetailByQuery(
                             routeId = target.routeId,
