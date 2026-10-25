@@ -303,3 +303,19 @@
   classes.jar 清单为准；仍不引入 extended 依赖。
 - 版本保持 0.9.0 / versionCode 900 不变；本批之后重打
   干净 APK。
+
+## 17. v0.9.0 第八批范围（依赖声明修正）
+
+- 原则：引入一个库的新版时，必须同步核对它编译时所
+  用的依赖版本，不能只看它自己 POM 里声明的版本。
+  navigation-compose 2.8.0 的 POM 写的是
+  lifecycle-viewmodel-compose 2.6.2，但它的字节码调用
+  了 2.6.2 里没有的 KClass 重载——POM 声明与编译实际
+  不一致时，以字节码 + javap 实测为准。
+- 本批：`app/build.gradle.kts:291` 的
+  lifecycle-viewmodel-compose 由 2.6.1 提到 2.8.3，
+  并附注释。Compose BOM 不管理 lifecycle 制品，这个
+  pin 是抬起全家的唯一约束。
+- 版本保持 0.9.0 / versionCode 900 不变；本批不改界面
+  与行为，不必为本批重打 APK（clean3 已是 2.8.3 对齐
+  的产物）。

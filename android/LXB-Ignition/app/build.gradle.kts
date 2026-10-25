@@ -287,8 +287,14 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(project(":lxb-core"))
 
-    // ViewModel for Compose
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+    // ViewModel for Compose: pinned to 2.8.3, NOT 2.6.x. navigation-compose
+    // 2.8.0 (added with the top-level NavHost) calls the KClass + CreationExtras
+    // viewModel() overload, which does not exist in lifecycle-viewmodel-compose
+    // 2.6.x; with 2.6.x the app crashes on first launch with NoSuchMethodError.
+    // The Compose BOM does not manage lifecycle artifacts, so this pin is the
+    // only thing lifting the family: 2.8.3's own POM requirements then lift
+    // lifecycle-viewmodel/runtime to 2.8.3 as well.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
 
     // OkHttp - 发送需求到远端服务器
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

@@ -146,6 +146,30 @@
   干净源码重打 debug APK（重打脚本同时修复 kotlinc
   退出码未透传的小毛病）。
 
+### 第八批（依赖声明修正；第七批 NavHost 引入的真机崩溃的仓库级根因）
+
+- 真机崩溃链：顶层 NavHost（第七批引入）首次组合时，
+  navigation-compose 2.8.0 的 SaveableStateProvider 调用
+  `viewModel(KClass, …, CreationExtras, …)` 重载，而仓库
+  在 `app/build.gradle.kts:291` 里钉着上游留下的
+  `lifecycle-viewmodel-compose:2.6.1`；一次真实 Gradle
+  构建会解析成 max(2.6.1, 2.6.2) = 2.6.2，而 2.6.2 的
+  ViewModelKt 里没有 KClass 开头的重载，于是首次打开
+  必以 NoSuchMethodError 闪退。手动打包管线之前两次
+  重打（clean2 修 core、clean3 修 lifecycle）掩盖的正是
+  这个仓库级错位。
+- 本批：把该 pin 提到 2.8.3（已实测 2.8.3 的 ViewModelKt
+  里有且仅有要找的那个重载），并附注释写清原因。
+  Compose BOM 不管理 lifecycle 制品，所以这个 pin 是
+  抬起全家的唯一约束；2.8.3 自身的 POM 要求会把
+  lifecycle-viewmodel/runtime 一并抬到 2.8.3。
+  目录里的 lifecycle-runtime-ktx 2.6.1（version catalog）
+  不用动，max 规则会把它抬上去。
+- 版本保持 0.9.0 / versionCode 900 不变。本批只改依赖
+  声明与文档，不改任何界面与行为；之前已发的 clean3
+  APK 本来就是按 2.8.3 对齐打出来的，本批之后仓库声明
+  与 clean3 的实际依赖一致，不必为本批重打 APK。
+
 ### 明确未做（本批有意不做，留待后续决策/验证）
 
 - 顶层 NavHost 已于第五批落地（只覆盖底部 4 个 Tab；各 Tab
