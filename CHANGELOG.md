@@ -65,6 +65,26 @@
   什么 + 能怎么办”。打开系统设置本身的逻辑与 ViewModel 未动。
 - 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
 
+### 第四批（本版新增，本批只做小组件抽取）
+
+- 语言基础设施先行移动：MainActivity.kt 里私有的 `UiI18n` 类、
+  `LocalUiI18n`、顶层 `tr()` / `ut()` 与 `ZhMap` 对照表原样移到
+  新文件 `ui/i18n/UiI18n.kt`（公开）；MainActivity 只留同名薄
+  wrapper（`tr()` / `ut()` 委托，`UiI18n` 为类型别名、
+  `LocalUiI18n` 为同名转发值），现有调用点未改。语言机制未变，
+  没有迁移到 `stringResource`。
+- 小组件抽取：`DeleteConfirmDialog` 与 `EmptyStateBox` 抽到
+  `ui/components/UiComponents.kt`，签名与行为不变；`GlyphBadge`
+  因 `EmptyStateBox` 依赖它而一并移过去（连同它独占的
+  `glyphToIcon`），没有复制两份。调用点只改导入/引用。
+  `PageHeaderBlock`、`SurfacePanel` 等其他组件本批不抽。
+- 移动核对：`ZhMap` 条目行数移动前后一致（660 行、659 个唯一键，
+  1 个重复键原样保留）；已有翻译一字未动；覆盖脚本已同步改读
+  新文件，复核缺失仍为 0；MainActivity 里旧定义残留 0 处；
+  调用点数量一致（`DeleteConfirmDialog` 4 处、`EmptyStateBox`
+  4 处、`GlyphBadge` 18 处）；删了移动后仅剩的 3 个未用导入。
+- 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
+
 ### 明确未做（本批有意不做，留待后续决策/验证）
 
 - 完整 NavHost 重构：没有编译器兜底时全量替换导航风险太大，
@@ -73,9 +93,8 @@
   框（字段在 ViewModel 中，返回不丢弃），只做纯展示的未保存
   提示；草稿持久化仍不引入，见 `docs/PRODUCT_SPEC.md` §11。
 - `DeleteConfirmDialog` / `EmptyStateBox` 抽到 `ui/components/`：
-  本批评估后放弃——两者依赖 MainActivity 私有的 `tr()` /
-  `LocalUiI18n` / `GlyphBadge`，抽取必须改签名或复制语言 plumbing，
-  没有编译验证时风险高于收益；待有编译 gate 的批次再做。
+  已于第四批用“先移语言基础设施、再抽组件”的两步法完成，
+  见上；`PageHeaderBlock` / `SurfacePanel` 等其他组件仍未抽。
 - 全量 `tr()` → `strings.xml` 迁移：按规范与语言选择的约束，本批
   只做覆盖补齐，不迁移（见 PRODUCT_SPEC.md §10）。
 

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Check tr("...") coverage against ZhMap in MainActivity.kt.
+"""Check tr("...") coverage against ZhMap in ui/i18n/UiI18n.kt.
 
 Scope (deliberate, see docs/PRODUCT_SPEC.md):
-- Only MainActivity.kt's tr() literal arguments are checked, because tr()
-  is private to that file and is the app's user-language (uiLang) system.
+- Batch 6 moved ZhMap from MainActivity.kt to ui/i18n/UiI18n.kt and
+  MainActivity.kt's tr() is now a thin wrapper delegating there, so the
+  table is read from the new file; tr() literals are scanned in both
+  MainActivity.kt and ui/components/UiComponents.kt (whose dialog calls
+  the same tr()). tr() is the app's user-language (uiLang) system.
   It is NOT Android stringResource: uiLang is user-settable in Config and
   differs from the system locale, so a stringResource migration would break
   the language choice. This script only finds missing Chinese entries.
@@ -24,6 +27,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = ROOT / "android/LXB-Ignition/app/src/main/java/com/example/lxb_ignition/MainActivity.kt"
+I18N = ROOT / "android/LXB-Ignition/app/src/main/java/com/example/lxb_ignition/ui/i18n/UiI18n.kt"
+COMPONENTS = (
+    ROOT
+    / "android/LXB-Ignition/app/src/main/java/com/example/lxb_ignition/ui/components/UiComponents.kt"
+)
 VALIDATION = (
     ROOT
     / "android/LXB-Ignition/app/src/main/java/com/example/lxb_ignition/ui/validation/FormValidation.kt"
@@ -72,7 +80,7 @@ def find_form_error_messages(text: str) -> set[str]:
 
 
 def find_zhmap_keys(text: str) -> set[str]:
-    start = text.index("private val ZhMap = mapOf(")
+    start = text.index("val ZhMap = mapOf(")
     # Paren-depth scan from the '(' of mapOf(.
     depth = 0
     i = text.index("(", start)
@@ -156,14 +164,15 @@ DYNAMIC_KEYS = {
 
 def main() -> int:
     main_text = MAIN.read_text(encoding="utf-8")
-    tr_keys = find_tr_literals(main_text) | DYNAMIC_KEYS
-    zh_keys = find_zhmap_keys(main_text)
+    comp_text = COMPONENTS.read_text(encoding="utf-8") if COMPONENTS.exists() else ""
+    tr_keys = find_tr_literals(main_text) | find_tr_literals(comp_text) | DYNAMIC_KEYS
+    zh_keys = find_zhmap_keys(I18N.read_text(encoding="utf-8"))
     extra_keys = set()
     if VALIDATION.exists():
         extra_keys = find_form_error_messages(VALIDATION.read_text(encoding="utf-8"))
     needed = tr_keys | extra_keys
     missing = sorted(needed - zh_keys)
-    print(f"tr() keys in MainActivity.kt (literals + documented dynamic keys, unique): {len(tr_keys)}")
+    print(f"tr() keys (MainActivity.kt + UiComponents.kt literals + documented dynamic keys, unique): {len(tr_keys)}")
     print(f"FormValidation message literals (unique): {len(extra_keys)}")
     print(f"ZhMap keys: {len(zh_keys)}")
     print(f"needed (union): {len(needed)}")

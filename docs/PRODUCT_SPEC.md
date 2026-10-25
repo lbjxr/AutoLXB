@@ -223,3 +223,31 @@
   runCatching + `ACTION_APPLICATION_DEVELOPMENT_SETTINGS` /
   无线调试回退），只改失败反馈通道；ViewModel 未动。
 - 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
+
+## 13. v0.9.0 第四批范围（已落地，开发中 beta；本批只做小组件抽取）
+
+- 两步抽取法（解决前几批推迟的原因）：第一步先移语言基础设施，
+  把 MainActivity.kt 里私有的 `UiI18n` 类、`LocalUiI18n`、
+  顶层 `tr()` / `ut()` 与 `ZhMap` 对照表原样移到新文件
+  `ui/i18n/UiI18n.kt`（公开）；MainActivity 里只留同名薄 wrapper
+  （`tr()` / `ut()` 委托给新文件，`UiI18n` 为类型别名、
+  `LocalUiI18n` 为同名转发值），现有调用点一字未改。第二步再把
+  两个已稳定的小组件抽到 `ui/components/UiComponents.kt`：
+  `DeleteConfirmDialog` 与 `EmptyStateBox`，签名与行为不变；
+  `GlyphBadge` 因 `EmptyStateBox` 依赖它而一并移过去（连同它独占
+  的 `glyphToIcon`），没有复制两份。调用点只改导入/引用，不改
+  传参语义。`PageHeaderBlock`、`SurfacePanel` 等其他组件本批不抽。
+- 移动核对：`ZhMap` 条目行数移动前后一致（660 行、659 个唯一键，
+  其中 1 个重复键原样保留，未做去重）；已有翻译一字未动；
+  `docs/check_tr_coverage.py` 已同步改读新文件里的表并扫描
+  新组件文件里的 `tr()` 字面量，复核缺失仍为 0；MainActivity 里
+  旧定义残留 0 处；调用点数量移动前后一致（`DeleteConfirmDialog`
+  4 处调用、`EmptyStateBox` 4 处调用、`GlyphBadge` 18 处调用，
+  均指向新位置）；删除了移动后 MainActivity 里仅剩的 3 个未用
+  导入（`staticCompositionLocalOf`、`CircleShape`、`ImageVector`）。
+- 语言机制未变：抽取只是换了文件位置，`tr()` / ZhMap 机制、
+  `uiLang` 用户语言选择、中文兜底规则全部不变；没有迁移到
+  `stringResource`。
+- 行尾：MainActivity.kt 混用 CRLF/LF 且带 BOM，编辑按行保留
+  原行尾，未做全文件转换；两个新文件统一用 LF。
+- 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
