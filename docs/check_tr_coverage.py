@@ -118,6 +118,10 @@ def find_zhmap_keys(text: str) -> set[str]:
 # - Bottom-tab labels: tr(rawLabel) for the tab list in LXBIgnitionApp.
 # - Wireless-guide headlines: tr(ui.headline) for the states produced by
 #   resolveWirelessGuideUiState().
+# - ActivitySnackbarEvent keys (batch 5): the Activity carries English
+#   canonical keys and LXBIgnitionApp translates them via i18n.tr() at
+#   Snackbar display time, so they never appear as tr("...") literals.
+#   The action label "Retry" is translated the same way.
 DYNAMIC_KEYS = {
     "None",
     "Schedule",
@@ -143,6 +147,10 @@ DYNAMIC_KEYS = {
     "Stopping core service",
     "Pair and connect first",
     "Not started yet",
+    "Notification permission was denied. Task and runtime status may not be shown; enable notifications in system settings.",
+    "Failed to open Developer Options automatically. Please open Developer Options in system settings and try again.",
+    "Failed to open Wireless debugging settings automatically. Please open Wireless debugging in system settings and try again.",
+    "Retry",
 }
 
 

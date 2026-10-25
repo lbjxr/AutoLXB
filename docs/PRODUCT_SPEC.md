@@ -197,3 +197,29 @@
   性陪衬时 `contentDescription = null` 才是正确的（避免重复朗读）。
   本批审计后数量不变：`contentDescription = null` 4 处，有描述 0 处。
 - 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
+
+## 12. v0.9.0 第三批范围（已落地，开发中 beta；后续迭代之一）
+
+- 全 App 最后一批 Toast：此前 MainActivity 类里仅剩的 3 处
+  Toast（通知权限被拒、打开开发者选项失败、打开无线调试设置
+  失败）全部消除，`Toast.makeText` 在 MainActivity.kt 里为 0 处，
+  其他源码文件里也没有 Toast 调用点。本批范围只做这一件事，
+  不扩散到其他反馈通道。
+- 反馈通道：Activity 内以 `MutableSharedFlow`（replay = 0、
+  带缓冲）承载一次性事件 `ActivitySnackbarEvent`，传给
+  `LXBIgnitionApp` 已有的 SnackbarHost 展示；更新检查的
+  Snackbar 机制未动，两者共用同一个 SnackbarHostState 排队。
+  刻意不用裸字符串的 `MutableStateFlow`：同一失败第二次发生时
+  值不变就不会重播，Snackbar 也就不会再弹。
+- 文案与动作：3 条文案全部走现有 `tr()` / ZhMap（新增对照条目，
+  覆盖脚本的 DYNAMIC_KEYS 已登记，因为它们在展示时经
+  `i18n.tr()` 翻译、不以 `tr("...")` 字面量出现），格式为
+  “发生了什么 + 能怎么办”。“打开开发者选项失败”与“打开无线
+  调试设置失败”带 Snackbar 动作按钮“重试”，点动作重新执行
+  对应的打开系统设置操作（失败会再次以 Snackbar 报告，不会
+  静默）。通知权限那条不带动作：用户需到系统设置里手动开启，
+  文案里写清去向，不给一个点下去没用的按钮。
+- 打开系统设置本身的逻辑未改（`openSystemSettings` 仍是
+  runCatching + `ACTION_APPLICATION_DEVELOPMENT_SETTINGS` /
+  无线调试回退），只改失败反馈通道；ViewModel 未动。
+- 版本保持 0.9.0 / versionCode 900 不变，本批不发版。

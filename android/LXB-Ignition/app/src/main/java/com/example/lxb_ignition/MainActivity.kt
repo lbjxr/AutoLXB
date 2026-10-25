@@ -8,7 +8,6 @@ import android.provider.Settings
 import android.os.Bundle
 import android.widget.EditText
 import android.widget.NumberPicker
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -74,6 +73,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -88,6 +89,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -142,6 +144,9 @@ import com.lxb.server.cortex.LlmClient
 import com.lxb.server.cortex.LlmConfig
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.emptyFlow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -152,18 +157,26 @@ class MainActivity : ComponentActivity() {
         private const val ACTION_WIRELESS_DEBUGGING_SETTINGS = "android.settings.WIRELESS_DEBUGGING_SETTINGS"
     }
 
+    // Batch 5: Activity-level failures used to be shown as Toasts, which
+    // disappear and leave the user no next step. They are now emitted as
+    // one-shot events on a SharedFlow (replay = 0, buffered) so the
+    // LXBIgnitionApp SnackbarHost can show them. A MutableStateFlow
+    // holding a bare String is deliberately NOT used here: the same
+    // failure a second time would not re-emit, because the value is
+    // unchanged. tryEmit never suspends the Activity callbacks.
+    private val activityNoticeFlow =
+        MutableSharedFlow<ActivitySnackbarEvent>(extraBufferCapacity = 64)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) {
-            Toast.makeText(
-                this,
-                activityText(
-                    en = "Notification permission is recommended for task/runtime status.",
-                    zh = "建议开启通知权限，以显示任务和运行状态。"
-                ),
-                Toast.LENGTH_LONG
-            ).show()
+            activityNoticeFlow.tryEmit(
+                ActivitySnackbarEvent(
+                    messageKey = "Notification permission was denied. Task and runtime status may not be shown; enable notifications in system settings.",
+                    action = ActivitySnackbarAction.NONE
+                )
+            )
         }
     }
 
@@ -181,14 +194,13 @@ class MainActivity : ComponentActivity() {
     private fun openDeveloperOptionsSettings() {
         val ok = openSystemSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         if (!ok) {
-            Toast.makeText(
-                this,
-                activityText(
-                    en = "Failed to open Developer Options automatically.",
-                    zh = "无法自动打开开发者选项。"
-                ),
-                Toast.LENGTH_SHORT
-            ).show()
+            activityNoticeFlow.tryEmit(
+                ActivitySnackbarEvent(
+                    messageKey = "Failed to open Developer Options automatically. Please open Developer Options in system settings and try again.",
+                    action = ActivitySnackbarAction.OPEN_DEVELOPER_OPTIONS,
+                    actionLabelKey = "Retry"
+                )
+            )
         }
     }
 
@@ -196,14 +208,13 @@ class MainActivity : ComponentActivity() {
         val ok = openSystemSettings(ACTION_WIRELESS_DEBUGGING_SETTINGS)
             || openSystemSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         if (!ok) {
-            Toast.makeText(
-                this,
-                activityText(
-                    en = "Failed to open Wireless debugging settings automatically.",
-                    zh = "无法自动打开无线调试设置。"
-                ),
-                Toast.LENGTH_SHORT
-            ).show()
+            activityNoticeFlow.tryEmit(
+                ActivitySnackbarEvent(
+                    messageKey = "Failed to open Wireless debugging settings automatically. Please open Wireless debugging in system settings and try again.",
+                    action = ActivitySnackbarAction.OPEN_WIRELESS_DEBUGGING,
+                    actionLabelKey = "Retry"
+                )
+            )
         }
     }
 
@@ -215,7 +226,8 @@ class MainActivity : ComponentActivity() {
             LXBIgnitionTheme {
                 LXBIgnitionApp(
                     onOpenDeveloperOptionsSettings = { openDeveloperOptionsSettings() },
-                    onOpenWirelessDebuggingSettings = { openWirelessDebuggingSettingsFromUi() }
+                    onOpenWirelessDebuggingSettings = { openWirelessDebuggingSettingsFromUi() },
+                    activitySnackbarEvents = activityNoticeFlow,
                 )
             }
         }
@@ -232,9 +244,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun activityText(en: String, zh: String): String {
-        return if (Locale.getDefault().language.equals("zh", ignoreCase = true)) zh else en
-    }
 }
 
 // Batch 1: named in-tab page constants. Previously ControlTab/ConfigTab used raw
@@ -258,22 +267,67 @@ private const val CONFIG_PAGE_LLM = 2
 private const val CONFIG_PAGE_UNLOCK_POLICY = 3
 private const val CONFIG_PAGE_MAP_SYNC = 4
 
+// Batch 5: one-shot Activity -> Snackbar events. The message is carried
+// as an English canonical key and translated through i18n.tr() at
+// display time, so it follows the user-chosen uiLang (not the system
+// locale). Public visibility is required: LXBIgnitionApp is a public
+// function and its parameter type must not be private.
+enum class ActivitySnackbarAction {
+    NONE,
+    OPEN_DEVELOPER_OPTIONS,
+    OPEN_WIRELESS_DEBUGGING
+}
+
+data class ActivitySnackbarEvent(
+    val messageKey: String,
+    val action: ActivitySnackbarAction = ActivitySnackbarAction.NONE,
+    val actionLabelKey: String? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LXBIgnitionApp(
     viewModel: MainViewModel = viewModel(),
     onOpenDeveloperOptionsSettings: () -> Unit = {},
-    onOpenWirelessDebuggingSettings: () -> Unit = {}
+    onOpenWirelessDebuggingSettings: () -> Unit = {},
+    activitySnackbarEvents: SharedFlow<ActivitySnackbarEvent> = emptyFlow(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val uiLang by viewModel.uiLang.collectAsState()
     val appUpdateResult by viewModel.appUpdateResult.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val i18n = remember(uiLang) { UiI18n(uiLang) }
+    val latestI18n by rememberUpdatedState(i18n)
 
     LaunchedEffect(appUpdateResult) {
         if (appUpdateResult.isNotBlank()) {
             snackbarHostState.showSnackbar(appUpdateResult)
+        }
+    }
+
+    // Batch 5: Activity-level failures (notification permission, system
+    // settings open failures) arrive as one-shot events and are shown
+    // on the same SnackbarHost as the update check. latestI18n (via
+    // rememberUpdatedState) keeps the translation current without
+    // restarting the collection when uiLang changes. The update-check
+    // effect above is untouched and keeps its own queue slot.
+    LaunchedEffect(activitySnackbarEvents) {
+        activitySnackbarEvents.collect { event ->
+            val actionLabel = event.actionLabelKey?.let { latestI18n.tr(it) }
+            val result = snackbarHostState.showSnackbar(
+                message = latestI18n.tr(event.messageKey),
+                actionLabel = actionLabel,
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                when (event.action) {
+                    ActivitySnackbarAction.OPEN_DEVELOPER_OPTIONS ->
+                        onOpenDeveloperOptionsSettings()
+                    ActivitySnackbarAction.OPEN_WIRELESS_DEBUGGING ->
+                        onOpenWirelessDebuggingSettings()
+                    ActivitySnackbarAction.NONE -> Unit
+                }
+            }
         }
     }
 
@@ -2473,6 +2527,15 @@ private val ZhMap = mapOf(
     // workflow forms. Display-only: leaving a form does not discard edits,
     // because the fields live in ViewModel StateFlows.
     "Unsaved changes. Your edits are kept in this form until you save." to "有未保存的更改。返回后仍可继续编辑，点保存后才会生效。",
+    // Batch 5 (v0.9.0): Activity-level failures formerly shown as Toasts,
+    // now routed to the app SnackbarHost. Keys are the English canonical
+    // messages carried by ActivitySnackbarEvent and translated through
+    // i18n.tr() at display time (see docs/check_tr_coverage.py,
+    // DYNAMIC_KEYS, for why they are not tr() literals).
+    "Notification permission was denied. Task and runtime status may not be shown; enable notifications in system settings." to "通知权限被拒绝，任务和运行状态可能无法显示；请到系统设置里开启通知权限。",
+    "Failed to open Developer Options automatically. Please open Developer Options in system settings and try again." to "无法自动打开开发者选项，请到系统设置里手动打开开发者选项后重试。",
+    "Failed to open Wireless debugging settings automatically. Please open Wireless debugging in system settings and try again." to "无法自动打开无线调试设置，请到系统设置里手动打开无线调试后重试。",
+    "Retry" to "重试",
 )
 
 private data class RouteEditorTarget(
