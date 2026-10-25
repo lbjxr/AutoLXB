@@ -46,6 +46,24 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -79,6 +97,8 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.lxb_ignition.ui.copy.UserCopy
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.viewinterop.AndroidView
@@ -211,6 +231,27 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Batch 1: named in-tab page constants. Previously ControlTab/ConfigTab used raw
+// ints (0/1/2/...) and TasksTab used function-local vals; the values and the Int
+// state type are unchanged, so behaviour is identical. A NavHost back stack is
+// deliberately NOT introduced in this batch (see docs/PRODUCT_SPEC.md).
+private const val CONTROL_PAGE_OVERVIEW = 0
+private const val CONTROL_PAGE_WIRELESS_GUIDE = 1
+private const val CONTROL_PAGE_ROOT_GUIDE = 2
+private const val TASKS_PAGE_HOME = 0
+private const val TASKS_PAGE_RECENT_RUNS = 1
+private const val TASKS_PAGE_ROUTE_EDITOR = 2
+private const val TASKS_PAGE_TEMPLATE_LIST = 3
+private const val TASKS_PAGE_TEMPLATE_FORM = 4
+private const val TASKS_PAGE_WORKFLOW_LIST = 5
+private const val TASKS_PAGE_WORKFLOW_FORM = 6
+private const val TASKS_PAGE_TEMPLATE_PICKER = 7
+private const val CONFIG_PAGE_OVERVIEW = 0
+private const val CONFIG_PAGE_DEVICE_CORE = 1
+private const val CONFIG_PAGE_LLM = 2
+private const val CONFIG_PAGE_UNLOCK_POLICY = 3
+private const val CONFIG_PAGE_MAP_SYNC = 4
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LXBIgnitionApp(
@@ -235,11 +276,14 @@ fun LXBIgnitionApp(
     }
 
     CompositionLocalProvider(LocalUiI18n provides i18n) {
+        // Batch 1: Material icons replace the former text glyphs. The
+        // NavigationBarItem label already carries the accessible name, so the
+        // decorative icon uses contentDescription = null (no double reading).
         val tabs = listOf(
-            "Control" to "⌂",
-            "Tasks" to "✓",
-            "Config" to "⚙",
-            "Logs" to "≡"
+            "Control" to Icons.Filled.Home,
+            "Tasks" to Icons.Filled.CheckCircle,
+            "Config" to Icons.Filled.Settings,
+            "Logs" to Icons.Filled.Menu
         )
         Scaffold(
             topBar = {
@@ -276,7 +320,7 @@ fun LXBIgnitionApp(
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                                 unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
                             ),
-                            icon = { Text(tab.second, fontSize = 18.sp) },
+                            icon = { Icon(imageVector = tab.second, contentDescription = null, modifier = Modifier.size(24.dp)) },
                             label = { Text(label) }
                         )
                     }
@@ -405,12 +449,12 @@ fun ControlTab(
     val wirelessDebuggingEnabled by viewModel.wirelessDebuggingEnabled.collectAsState()
     val rootAvailable by viewModel.rootAvailable.collectAsState()
     val rootDetail by viewModel.rootDetail.collectAsState()
-    var page by rememberSaveable { mutableIntStateOf(0) }
+    var page by rememberSaveable { mutableIntStateOf(CONTROL_PAGE_OVERVIEW) }
     var showStopPairingDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(wireless.state) {
         if (wireless.state == "STOP_PAIRING_REQUIRED") {
-            page = 1
+            page = CONTROL_PAGE_WIRELESS_GUIDE
             showStopPairingDialog = true
         }
     }
@@ -443,19 +487,19 @@ fun ControlTab(
     }
 
     when (page) {
-        0 -> ControlOverviewPage(
+        CONTROL_PAGE_OVERVIEW -> ControlOverviewPage(
             modifier = modifier,
             coreRuntime = coreRuntime,
-            onOpenWirelessGuide = { page = 1 },
-            onOpenRootGuide = { page = 2 },
+            onOpenWirelessGuide = { page = CONTROL_PAGE_WIRELESS_GUIDE },
+            onOpenRootGuide = { page = CONTROL_PAGE_ROOT_GUIDE },
             onStop = { viewModel.stopServerProcess() },
             onRefreshState = { viewModel.refreshCoreRuntimeStatusNow() },
             onOpenConfig = onOpenConfig
         )
-        1 -> SingleConfigPage(
+        CONTROL_PAGE_WIRELESS_GUIDE -> SingleConfigPage(
             title = tr("Wireless ADB startup"),
             modifier = modifier,
-            onBack = { page = 0 }
+            onBack = { page = CONTROL_PAGE_OVERVIEW }
         ) {
             WirelessGuidePage(
                 status = wireless,
@@ -472,10 +516,10 @@ fun ControlTab(
                 }
             )
         }
-        2 -> SingleConfigPage(
+        CONTROL_PAGE_ROOT_GUIDE -> SingleConfigPage(
             title = tr("Root startup"),
             modifier = modifier,
-            onBack = { page = 0 }
+            onBack = { page = CONTROL_PAGE_OVERVIEW }
         ) {
             RootStartGuidePage(
                 rootAvailable = rootAvailable,
@@ -684,11 +728,19 @@ private fun ProductEntryCard(
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 )
-                Text(
-                    text = "${tr("Open")} ›",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = tr("Open"),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }
@@ -722,7 +774,7 @@ private fun PageActionButton(
     OutlinedButton(
         onClick = onClick,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-        modifier = modifier.height(32.dp)
+        modifier = modifier.height(48.dp)
     ) {
         Text(text, fontSize = 12.sp)
     }
@@ -829,6 +881,38 @@ private fun SummaryInfoStrip(
     }
 }
 
+/**
+ * Batch 1: maps the legacy text glyphs passed around MainActivity to Material
+ * icons. Call sites keep passing the old glyph string, so no call-site
+ * signature changes are needed in this batch; a later batch can migrate call
+ * sites to ImageVector directly. Two exceptions are intentional, not leftovers:
+ * a numeric glyph is a step number (readable text, not an icon), and "•" is a
+ * decorative bullet rendered as a small dot. Icons beside a visible title use
+ * contentDescription = null because the title already carries the meaning.
+ */
+private fun glyphToIcon(glyph: String): ImageVector = when (glyph) {
+    "⌂" -> Icons.Filled.Home
+    "✓" -> Icons.Filled.CheckCircle
+    "!" -> Icons.Filled.Warning
+    "▶" -> Icons.Filled.PlayArrow
+    "○" -> Icons.Filled.Info
+    "⚙" -> Icons.Filled.Settings
+    "≡", "☰", "▣", "#" -> Icons.Filled.Menu
+    "↳", "➜", "☞" -> Icons.Filled.KeyboardArrowRight
+    "⇄", "↺", "⌁", "☁", "∞" -> Icons.Filled.Refresh
+    "⌨" -> Icons.Filled.Edit
+    "⏰" -> Icons.Filled.Schedule
+    "✉" -> Icons.Filled.Email
+    "⚡" -> Icons.Filled.PlayArrow
+    "✦", "★" -> Icons.Filled.Star
+    "🔐" -> Icons.Filled.Lock
+    "☑" -> Icons.Filled.CheckCircle
+    "☾" -> Icons.Filled.Notifications
+    "🌐" -> Icons.Filled.Info
+    "⌕" -> Icons.Filled.Search
+    else -> Icons.Filled.Info
+}
+
 @Composable
 private fun GlyphBadge(
     glyph: String,
@@ -843,11 +927,25 @@ private fun GlyphBadge(
             .border(BorderStroke(1.dp, accentColor.copy(alpha = 0.18f)), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = glyph,
-            color = accentColor,
-            fontSize = 16.sp
-        )
+        when {
+            glyph.isNotEmpty() && glyph.all { it.isDigit() } -> Text(
+                text = glyph,
+                color = accentColor,
+                fontSize = 16.sp
+            )
+            glyph == "•" -> Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(accentColor)
+            )
+            else -> Icon(
+                imageVector = glyphToIcon(glyph),
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(size * 0.55f)
+            )
+        }
     }
 }
 
@@ -1587,12 +1685,12 @@ fun TaskRuntimeStatusCard(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f)
             )
             Text(
-                text = "${tr("Phase")}: ${status.phase}",
+                text = "${tr("Phase")}: ${tr(ut(status.phase))}",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f)
             )
             Text(
-                text = if (status.running) status.detail else tr("No task is running."),
+                text = if (status.running) ut(status.detail) else tr("No task is running."),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
             )
@@ -1613,12 +1711,19 @@ private class UiI18n(private val lang: String) {
         if (lang != "zh") return text
         return ZhMap[text] ?: text
     }
+
+    // Batch 1: user-language version of a runtime/log message. Returns the
+    // original text unchanged when UserCopy has no mapping for it.
+    fun userText(text: String): String = UserCopy.runtimeMessage(text, lang) ?: text
 }
 
 private val LocalUiI18n = staticCompositionLocalOf { UiI18n("en") }
 
 @Composable
 private fun tr(text: String): String = LocalUiI18n.current.tr(text)
+
+@Composable
+private fun ut(text: String): String = LocalUiI18n.current.userText(text)
 
 private fun llmRequestTypeLabel(requestType: String): String {
     return when (LlmConfig.normalizeRequestType(requestType)) {
@@ -1862,6 +1967,12 @@ private val ZhMap = mapOf(
     "Submit" to "提交",
     "Cancel" to "取消",
     "Delete" to "删除",
+    "Delete template" to "删除模板",
+    "Delete workflow" to "删除工作流",
+    "This item will be permanently deleted and cannot be restored." to "该项将被永久删除，无法恢复。",
+    "Remove steps from route" to "从路线中移除步骤",
+    "Saving will remove the selected steps from this route." to "保存后，这些步骤将从这条路线中移除。",
+    "steps to remove" to "个步骤将被移除",
     "Select Time" to "选择时间",
     "Hour" to "小时",
     "Minute" to "分钟",
@@ -2305,17 +2416,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val workflowNotifyActiveTimeEnd by viewModel.workflowNotifyActiveTimeEnd.collectAsState()
     val workflowNotifyLlmConditionEnabled by viewModel.workflowNotifyLlmConditionEnabled.collectAsState()
     val workflowNotifyLlmCondition by viewModel.workflowNotifyLlmCondition.collectAsState()
-    var page by rememberSaveable { mutableIntStateOf(0) }
+    var page by rememberSaveable { mutableIntStateOf(TASKS_PAGE_HOME) }
     var selectedTask by remember { mutableStateOf<TaskSummary?>(null) }
     var routeEditorTarget by remember { mutableStateOf<RouteEditorTarget?>(null) }
-    val pageHome = 0
-    val pageRecentRuns = 1
-    val pageTaskRouteEditor = 2
-    val pageTemplateList = 3
-    val pageTemplateForm = 4
-    val pageWorkflowList = 5
-    val pageWorkflowForm = 6
-    val pageTemplatePicker = 7
     val portableImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -2324,8 +2427,8 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 uri = uri
             ) { importedType, _ ->
                 when (importedType) {
-                    "workflow" -> page = pageWorkflowForm
-                    "template" -> page = pageTemplateForm
+                    "workflow" -> page = TASKS_PAGE_WORKFLOW_FORM
+                    "template" -> page = TASKS_PAGE_TEMPLATE_FORM
                 }
                 viewModel.refreshTemplateListOnDevice(silent = true)
                 viewModel.refreshWorkflowListOnDevice(silent = true)
@@ -2356,7 +2459,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     }
 
     LaunchedEffect(page) {
-        if (page != pageHome && page != pageRecentRuns) return@LaunchedEffect
+        if (page != TASKS_PAGE_HOME && page != TASKS_PAGE_RECENT_RUNS) return@LaunchedEffect
         while (true) {
             viewModel.refreshTaskListOnDevice(silent = true)
             delay(3000)
@@ -2364,7 +2467,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     }
 
     when (page) {
-        pageHome -> {
+        TASKS_PAGE_HOME -> {
             Column(
                 modifier = modifier
                     .fillMaxSize()
@@ -2391,9 +2494,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 )
 
                 TaskSessionCard(viewModel = viewModel)
-                CompactEntryRow(title = tr("Templates"), meta = "${templates.size} ${tr("items")}", onClick = { page = pageTemplateList })
-                CompactEntryRow(title = tr("Workflows"), meta = "${workflows.size} ${tr("items")}", onClick = { page = pageWorkflowList })
-                CompactEntryRow(title = tr("Recent Runs"), meta = "${tasks.size} ${tr("items")}", onClick = { page = pageRecentRuns })
+                CompactEntryRow(title = tr("Templates"), meta = "${templates.size} ${tr("items")}", onClick = { page = TASKS_PAGE_TEMPLATE_LIST })
+                CompactEntryRow(title = tr("Workflows"), meta = "${workflows.size} ${tr("items")}", onClick = { page = TASKS_PAGE_WORKFLOW_LIST })
+                CompactEntryRow(title = tr("Recent Runs"), meta = "${tasks.size} ${tr("items")}", onClick = { page = TASKS_PAGE_RECENT_RUNS })
                 OutlinedButton(
                     onClick = { portableImportLauncher.launch(arrayOf("application/json", "text/plain")) },
                     modifier = Modifier.fillMaxWidth()
@@ -2403,7 +2506,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageTemplateList -> {
+        TASKS_PAGE_TEMPLATE_LIST -> {
             val listState = rememberLazyListState()
             Column(
                 modifier = modifier
@@ -2415,11 +2518,11 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Templates"),
                     subtitle = tr("Author reusable task templates and their primary routes."),
                     glyph = "▣",
-                    onBack = { page = pageHome },
+                    onBack = { page = TASKS_PAGE_HOME },
                     primaryActionLabel = tr("New"),
                     onPrimaryAction = {
                         viewModel.resetTemplateForm()
-                        page = pageTemplateForm
+                        page = TASKS_PAGE_TEMPLATE_FORM
                     },
                     secondaryActionLabel = tr("Refresh"),
                     onSecondaryAction = { viewModel.refreshTemplateListOnDevice() }
@@ -2444,7 +2547,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     onRun = { viewModel.runTemplateOnDevice(template.templateId) },
                                     onEdit = {
                                         viewModel.loadTemplateForm(template)
-                                        page = pageTemplateForm
+                                        page = TASKS_PAGE_TEMPLATE_FORM
                                     },
                                     onRoute = {
                                         routeEditorTarget = RouteEditorTarget(
@@ -2456,7 +2559,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                             userPlaybook = template.userPlaybook,
                                             mode = template.taskMapMode
                                         )
-                                        page = pageTaskRouteEditor
+                                        page = TASKS_PAGE_ROUTE_EDITOR
                                     },
                                     onDelete = { viewModel.deleteTemplateOnDevice(template.templateId) }
                                 )
@@ -2470,7 +2573,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageTemplateForm -> {
+        TASKS_PAGE_TEMPLATE_FORM -> {
             var showTemplateAppPicker by rememberSaveable { mutableStateOf(false) }
             Column(
                 modifier = modifier
@@ -2483,11 +2586,11 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Template"),
                     subtitle = tr("Define one reusable task unit."),
                     glyph = "▣",
-                    onBack = { page = pageTemplateList },
+                    onBack = { page = TASKS_PAGE_TEMPLATE_LIST },
                     primaryActionLabel = tr("Save"),
                     onPrimaryAction = {
                         viewModel.saveTemplateOnDevice()
-                        page = pageTemplateList
+                        page = TASKS_PAGE_TEMPLATE_LIST
                     },
                     secondaryActionLabel = tr("Export Template"),
                     onSecondaryAction = {
@@ -2555,7 +2658,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             userPlaybook = templatePlaybook,
                             mode = templateTaskMapMode
                         )
-                        page = pageTaskRouteEditor
+                        page = TASKS_PAGE_ROUTE_EDITOR
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -2574,7 +2677,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageWorkflowList -> {
+        TASKS_PAGE_WORKFLOW_LIST -> {
             val listState = rememberLazyListState()
             Column(
                 modifier = modifier
@@ -2586,11 +2689,11 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Workflows"),
                     subtitle = tr("Sequence templates and attach one optional trigger."),
                     glyph = "↳",
-                    onBack = { page = pageHome },
+                    onBack = { page = TASKS_PAGE_HOME },
                     primaryActionLabel = tr("New"),
                     onPrimaryAction = {
                         viewModel.resetWorkflowForm()
-                        page = pageWorkflowForm
+                        page = TASKS_PAGE_WORKFLOW_FORM
                     },
                     secondaryActionLabel = tr("Refresh"),
                     onSecondaryAction = { viewModel.refreshWorkflowListOnDevice() }
@@ -2615,7 +2718,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     onRun = { viewModel.runWorkflowOnDevice(workflow.workflowId) },
                                     onEdit = {
                                         viewModel.loadWorkflowForm(workflow)
-                                        page = pageWorkflowForm
+                                        page = TASKS_PAGE_WORKFLOW_FORM
                                     },
                                     onToggleEnabled = { checked -> viewModel.toggleWorkflowTriggerEnabledOnDevice(workflow, checked) },
                                     onDelete = { viewModel.deleteWorkflowOnDevice(workflow.workflowId) }
@@ -2630,7 +2733,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageWorkflowForm -> {
+        TASKS_PAGE_WORKFLOW_FORM -> {
             Column(
                 modifier = modifier
                     .fillMaxSize()
@@ -2642,11 +2745,11 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Workflow"),
                     subtitle = tr("Select a template and optional trigger."),
                     glyph = "↳",
-                    onBack = { page = pageWorkflowList },
+                    onBack = { page = TASKS_PAGE_WORKFLOW_LIST },
                     primaryActionLabel = tr("Save"),
                     onPrimaryAction = {
                         viewModel.saveWorkflowOnDevice()
-                        page = pageWorkflowList
+                        page = TASKS_PAGE_WORKFLOW_LIST
                     },
                     secondaryActionLabel = tr("Export Workflow"),
                     onSecondaryAction = {
@@ -2687,7 +2790,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 onOpen = {
                                     template?.let {
                                         viewModel.loadTemplateForm(it)
-                                        page = pageTemplateForm
+                                        page = TASKS_PAGE_TEMPLATE_FORM
                                     }
                                 },
                                 onMoveUp = { viewModel.moveWorkflowStepUp(index) },
@@ -2698,7 +2801,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     }
                 }
                 OutlinedButton(
-                    onClick = { page = pageTemplatePicker },
+                    onClick = { page = TASKS_PAGE_TEMPLATE_PICKER },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(tr("Add step"))
@@ -2750,7 +2853,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageTemplatePicker -> {
+        TASKS_PAGE_TEMPLATE_PICKER -> {
             val listState = rememberLazyListState()
             Column(
                 modifier = modifier
@@ -2762,7 +2865,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Select template"),
                     subtitle = tr("Choose an existing template to add to this workflow."),
                     glyph = "▣",
-                    onBack = { page = pageWorkflowForm }
+                    onBack = { page = TASKS_PAGE_WORKFLOW_FORM }
                 )
                 SurfacePanel(
                     modifier = Modifier
@@ -2778,7 +2881,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 meta = template.packageName.ifBlank { tr("No app") },
                                 onClick = {
                                     viewModel.addWorkflowStepTemplate(template.templateId)
-                                    page = pageWorkflowForm
+                                    page = TASKS_PAGE_WORKFLOW_FORM
                                 }
                             )
                             if (index < templates.lastIndex) {
@@ -2790,7 +2893,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageRecentRuns -> {
+        TASKS_PAGE_RECENT_RUNS -> {
             val taskListState = rememberLazyListState()
             Column(
                 modifier = modifier
@@ -2802,7 +2905,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Recent Runs"),
                     subtitle = tr("Review what just ran, what failed, and what route data was captured."),
                     glyph = "☰",
-                    onBack = { page = pageHome },
+                    onBack = { page = TASKS_PAGE_HOME },
                     primaryActionLabel = tr("Refresh"),
                     onPrimaryAction = { viewModel.refreshTaskListOnDevice() }
                 )
@@ -2847,7 +2950,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        pageTaskRouteEditor -> {
+        TASKS_PAGE_ROUTE_EDITOR -> {
             val target = routeEditorTarget
             LaunchedEffect(target?.source, target?.routeId, target?.packageName, target?.userTask, target?.userPlaybook, target?.mode) {
                 if (target != null) {
@@ -2868,7 +2971,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(onClick = { page = pageHome }) {
+                    OutlinedButton(onClick = { page = TASKS_PAGE_HOME }) {
                         Text(tr("Back"))
                     }
                     Text(
@@ -2885,8 +2988,8 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     saving = taskMapSaving,
                     onBack = {
                         page = when (target.source) {
-                            "template" -> pageTemplateForm
-                            else -> pageHome
+                            "template" -> TASKS_PAGE_TEMPLATE_FORM
+                            else -> TASKS_PAGE_HOME
                         }
                     },
                     onRefresh = {
@@ -3481,6 +3584,18 @@ private fun TaskRouteRecordSection(
     } else {
         emptyList()
     }
+    // Batch 1: removing steps is staged (and restorable) until Save is tapped,
+    // so the confirm dialog belongs on the Save action, not on each toggle.
+    var showRemoveStepsConfirm by rememberSaveable { mutableStateOf(false) }
+    if (showRemoveStepsConfirm) {
+        DeleteConfirmDialog(
+            itemName = "${selectedDeleteIds.size} ${tr("steps to remove")}",
+            title = tr("Remove steps from route"),
+            warning = tr("Saving will remove the selected steps from this route."),
+            onConfirm = onSaveManual,
+            onDismiss = { showRemoveStepsConfirm = false }
+        )
+    }
     SurfacePanel(
         modifier = Modifier.fillMaxWidth(),
         background = MaterialTheme.colorScheme.surface,
@@ -3505,7 +3620,7 @@ private fun TaskRouteRecordSection(
             if (editable) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        onClick = onSaveManual,
+                        onClick = { if (selectedDeleteIds.isEmpty()) onSaveManual() else showRemoveStepsConfirm = true },
                         enabled = !saving && keptActions.isNotEmpty()
                     ) {
                         Text(if (saving) tr("Saving...") else tr("Save manual route"))
@@ -3745,6 +3860,45 @@ private fun DetailTextLine(label: String, value: String) {
     Text("$label=$value", fontSize = 11.sp)
 }
 
+// Batch 1: shared Material 3 delete-confirm dialog. The caller passes
+// already-translated title/warning (via tr()); itemName is user data and is
+// shown verbatim so the dialog always names exactly what will be deleted.
+// Cancel does nothing; Confirm dismisses first, then runs the (unchanged)
+// delete call supplied by the caller.
+@Composable
+private fun DeleteConfirmDialog(
+    itemName: String,
+    title: String,
+    warning: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (itemName.isNotBlank()) {
+                    Text(text = itemName, style = MaterialTheme.typography.titleSmall)
+                }
+                Text(
+                    text = warning,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDismiss(); onConfirm() }) {
+                Text(text = tr("Delete"), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text = tr("Cancel")) }
+        }
+    )
+}
+
 @Composable
 fun TemplateRow(
     template: TaskTemplateSummary,
@@ -3754,6 +3908,16 @@ fun TemplateRow(
     onDelete: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    if (showDeleteConfirm) {
+        DeleteConfirmDialog(
+            itemName = template.name.ifBlank { template.description },
+            title = tr("Delete template"),
+            warning = tr("This item will be permanently deleted and cannot be restored."),
+            onConfirm = onDelete,
+            onDismiss = { showDeleteConfirm = false }
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -3791,17 +3955,17 @@ fun TemplateRow(
             TextButton(
                 onClick = onRun,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                modifier = Modifier.height(32.dp)
+                modifier = Modifier.height(48.dp)
             ) { Text(tr("Trigger now"), fontSize = 13.sp, maxLines = 1) }
             TextButton(
                 onClick = onRoute,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                modifier = Modifier.height(32.dp)
+                modifier = Modifier.height(48.dp)
             ) { Text(tr("Route"), fontSize = 13.sp, maxLines = 1) }
             TextButton(
-                onClick = onDelete,
+                onClick = { showDeleteConfirm = true },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                modifier = Modifier.height(32.dp)
+                modifier = Modifier.height(48.dp)
             ) { Text(tr("Delete"), fontSize = 13.sp, maxLines = 1, color = scheme.error) }
         }
     }
@@ -3824,6 +3988,16 @@ fun WorkflowRow(
         uncheckedTrackColor = scheme.primary.copy(alpha = 0.22f).compositeOver(scheme.surface),
         uncheckedBorderColor = scheme.primary.copy(alpha = 0.45f)
     )
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    if (showDeleteConfirm) {
+        DeleteConfirmDialog(
+            itemName = workflow.name,
+            title = tr("Delete workflow"),
+            warning = tr("This item will be permanently deleted and cannot be restored."),
+            onConfirm = onDelete,
+            onDismiss = { showDeleteConfirm = false }
+        )
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -3858,7 +4032,7 @@ fun WorkflowRow(
             colors = listToggleColors
         )
         TextButton(onClick = onRun) { Text(tr("Run")) }
-        TextButton(onClick = onDelete) { Text(tr("Delete")) }
+        TextButton(onClick = { showDeleteConfirm = true }) { Text(tr("Delete")) }
     }
 }
 
@@ -4499,52 +4673,51 @@ fun UnifiedStopCard(
 
 @Composable
 fun ConfigTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
-    // simple in-tab navigation:
-    // 0 = overview, 1 = control mode config, 2 = LLM, 3 = unlock policy, 4 = map sync
-    var page by rememberSaveable { mutableIntStateOf(0) }
+    // simple in-tab navigation (see CONFIG_PAGE_* constants above)
+    var page by rememberSaveable { mutableIntStateOf(CONFIG_PAGE_OVERVIEW) }
 
     when (page) {
-        0 -> ConfigOverviewPage(
+        CONFIG_PAGE_OVERVIEW -> ConfigOverviewPage(
             modifier = modifier,
             viewModel = viewModel,
-            onOpenDeviceCore = { page = 1 },
-            onOpenLlm = { page = 2 },
-            onOpenUnlockPolicy = { page = 3 },
-            onOpenMapSync = { page = 4 }
+            onOpenDeviceCore = { page = CONFIG_PAGE_DEVICE_CORE },
+            onOpenLlm = { page = CONFIG_PAGE_LLM },
+            onOpenUnlockPolicy = { page = CONFIG_PAGE_UNLOCK_POLICY },
+            onOpenMapSync = { page = CONFIG_PAGE_MAP_SYNC }
         )
-        1 -> SingleConfigPage(
+        CONFIG_PAGE_DEVICE_CORE -> SingleConfigPage(
             title = tr("Control mode config"),
             subtitle = tr("Choose how touch, typing, and task-time phone behavior should work on this device."),
             glyph = "⌁",
             modifier = modifier,
-            onBack = { page = 0 }
+            onBack = { page = CONFIG_PAGE_OVERVIEW }
         ) {
             LxbCoreConfigCard(viewModel)
         }
-        2 -> SingleConfigPage(
+        CONFIG_PAGE_LLM -> SingleConfigPage(
             title = tr("LLM config (device-side)"),
             subtitle = tr("Set the model endpoint used for device-side planning and visual understanding."),
             glyph = "✦",
             modifier = modifier,
-            onBack = { page = 0 }
+            onBack = { page = CONFIG_PAGE_OVERVIEW }
         ) {
             LlmConfigCard(viewModel)
         }
-        3 -> SingleConfigPage(
+        CONFIG_PAGE_UNLOCK_POLICY -> SingleConfigPage(
             title = tr("Unlock & lock policy"),
             subtitle = tr("Control how the phone is unlocked before a task and locked again afterward."),
             glyph = "🔐",
             modifier = modifier,
-            onBack = { page = 0 }
+            onBack = { page = CONFIG_PAGE_OVERVIEW }
         ) {
             UnlockPolicyConfigCard(viewModel)
         }
-        4 -> SingleConfigPage(
+        CONFIG_PAGE_MAP_SYNC -> SingleConfigPage(
             title = tr("Map sync & source"),
             subtitle = tr("Manage route assets, active map lane, and pull-by-identifier actions."),
             glyph = "➜",
             modifier = modifier,
-            onBack = { page = 0 }
+            onBack = { page = CONFIG_PAGE_OVERVIEW }
         ) {
             MapSyncConfigCard(viewModel)
         }
@@ -4941,7 +5114,7 @@ private fun AppLogCard(entry: UnifiedLogEntry, onClick: () -> Unit) {
                 }
             }
             Text(
-                text = entry.message,
+                text = ut(entry.message),
                 fontSize = 11.sp,
                 color = scheme.onSurface.copy(alpha = 0.92f),
                 maxLines = 3,
@@ -5063,7 +5236,7 @@ private fun TraceCard(entry: TraceEntry, onClick: () -> Unit) {
             }
             if (entry.summary.isNotBlank()) {
                 Text(
-                    text = "${entry.event}: ${entry.summary}",
+                    text = "${entry.event}: ${ut(entry.summary)}",
                     fontSize = 11.sp,
                     color = scheme.onSurface.copy(alpha = 0.92f),
                     maxLines = 2
@@ -5260,11 +5433,19 @@ fun ConfigEntryCard(
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
             )
-            Text(
-                text = "${tr("Open")} ›",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = tr("Open"),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }

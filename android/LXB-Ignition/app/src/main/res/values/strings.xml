@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">AutoLXB</string>
+    <!-- Batch 1: canonical English copy for the new delete-confirm dialogs.
+         Chinese copy lives in MainActivity ZhMap until batch 2 migrates tr()
+         to Android string resources (values-zh). -->
+    <string name="delete_confirm_title_template">Delete template</string>
+    <string name="delete_confirm_title_workflow">Delete workflow</string>
+    <string name="delete_confirm_warning_permanent">This item will be permanently deleted and cannot be restored.</string>
+    <string name="delete_confirm_title_remove_steps">Remove steps from route</string>
+    <string name="delete_confirm_warning_remove_steps">Saving will remove the selected steps from this route.</string>
 </resources>

@@ -1,7 +1,12 @@
 package com.example.lxb_ignition
 
+import com.example.lxb_ignition.ui.copy.UserCopy
+
 object UiMessageLocalizer {
     fun localize(uiLang: String, text: String): String {
+        // Batch 1: internal FSM terms are rendered in user language first;
+        // anything UserCopy does not recognise falls through to the table below.
+        UserCopy.runtimeMessage(text, uiLang)?.let { return it }
         if (uiLang != "zh") {
             return text
         }
