@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -70,7 +69,7 @@ fun glyphToIcon(glyph: String): ImageVector = when (glyph) {
     "↳", "➜", "☞" -> Icons.Filled.KeyboardArrowRight
     "⇄", "↺", "⌁", "☁", "∞" -> Icons.Filled.Refresh
     "⌨" -> Icons.Filled.Edit
-    "⏰" -> Icons.Filled.Alarm
+    "⏰" -> Icons.Filled.Notifications
     "✉" -> Icons.Filled.Email
     "⚡" -> Icons.Filled.PlayArrow
     "✦", "★" -> Icons.Filled.Star

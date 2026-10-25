@@ -290,3 +290,16 @@
 - 版本保持 0.9.0 / versionCode 900 不变；本批之后从仓库
   干净源码重打 debug APK，作为本版第一份与源码完全对得
   上的安装包。
+
+## 16. v0.9.0 第七批范围（图标修正；纠正第六批的错误修法）
+
+- 教训：改图标用法时必须同步改导入；声称某个图标“在
+  core 里”必须以解包核对为准，不能凭印象。第六批把
+  Schedule 换成 Alarm 时漏了 2 行 Schedule 导入，且
+  Alarm 本身也不在 core 1.7.0 里（实测 49 个 filled
+  图标，无 Alarm、无 Schedule），导致干净重打仍失败。
+- 本批：删掉 2 行残留的 Schedule 导入；"⏰" 映射到
+  Notifications（铃铛）。core 图标的选用以解包后的
+  classes.jar 清单为准；仍不引入 extended 依赖。
+- 版本保持 0.9.0 / versionCode 900 不变；本批之后重打
+  干净 APK。

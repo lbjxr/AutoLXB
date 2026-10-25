@@ -130,6 +130,22 @@
   编译管线（aapt2 + kotlinc + d8 + apksigner）从仓库干净
   源码重打 debug APK 验证。
 
+### 第七批（图标修正；第六批修法本身有误，本批纠正）
+
+- 第六批的教训：只改用法、不改导入是不够的；且
+  `Icons.Filled.Alarm` 也不在 material-icons-core 1.7.0 里
+  （实测 core 的 filled 图标共 49 个，无 Alarm、无
+  Schedule，两者都在 extended 里）。干净重打因此仍停在
+  kotlinc 阶段，恰好 3 条错误，未产出新 APK。
+- 本批：删掉 MainActivity 与 UiComponents 里残留的
+  `filled.Schedule` 导入各 1 行；`glyphToIcon` 里 "⏰" 的
+  映射由 `Alarm` 改为 `Notifications`（铃铛，语义≈闹钟/
+  提醒，且该文件本来就已导入 Notifications，无需新增
+  导入）。不引入 material-icons-extended 依赖。
+- 版本保持 0.9.0 / versionCode 900 不变；本批之后从仓库
+  干净源码重打 debug APK（重打脚本同时修复 kotlinc
+  退出码未透传的小毛病）。
+
 ### 明确未做（本批有意不做，留待后续决策/验证）
 
 - 顶层 NavHost 已于第五批落地（只覆盖底部 4 个 Tab；各 Tab
