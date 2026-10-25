@@ -109,6 +109,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.lxb_ignition.ui.navigation.TopNavRoutes
 import com.example.lxb_ignition.model.AppPackageOption
 import com.example.lxb_ignition.model.CoreRuntimeStatus
 import com.example.lxb_ignition.model.TaskMapDetail
@@ -292,7 +297,22 @@ fun LXBIgnitionApp(
     onOpenWirelessDebuggingSettings: () -> Unit = {},
     activitySnackbarEvents: SharedFlow<ActivitySnackbarEvent> = emptyFlow(),
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // Batch 7: top-level tabs are driven by a NavController + NavHost
+    // (routes in ui/navigation/TopNavRoutes.kt) instead of the former
+    // selectedTab Int state. The in-tab page stacks (Tasks/Control/
+    // Config, batches 3-4) are untouched; only the tab switch moves.
+    val navController = rememberNavController()
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val selectedTab = TopNavRoutes.tabIndexForRoute(currentRoute) ?: 0
+    fun navigateToTab(route: String) {
+        navController.navigate(route) {
+            popUpTo(TopNavRoutes.CONTROL) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     val uiLang by viewModel.uiLang.collectAsState()
     val appUpdateResult by viewModel.appUpdateResult.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -339,11 +359,14 @@ fun LXBIgnitionApp(
         // Batch 1: Material icons replace the former text glyphs. The
         // NavigationBarItem label already carries the accessible name, so the
         // decorative icon uses contentDescription = null (no double reading).
+        // Batch 7: each tab carries its NavHost route. The list order
+        // must still agree with TopNavRoutes.tabIndexForRoute, which
+        // drives the selected highlight from the current route.
         val tabs = listOf(
-            "Control" to Icons.Filled.Home,
-            "Tasks" to Icons.Filled.CheckCircle,
-            "Config" to Icons.Filled.Settings,
-            "Logs" to Icons.Filled.Menu
+            Triple("Control", Icons.Filled.Home, TopNavRoutes.CONTROL),
+            Triple("Tasks", Icons.Filled.CheckCircle, TopNavRoutes.TASKS),
+            Triple("Config", Icons.Filled.Settings, TopNavRoutes.CONFIG),
+            Triple("Logs", Icons.Filled.Menu, TopNavRoutes.LOGS)
         )
         Scaffold(
             topBar = {
@@ -372,7 +395,7 @@ fun LXBIgnitionApp(
                         val label = tr(rawLabel)
                         NavigationBarItem(
                             selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+                            onClick = { navigateToTab(tab.third) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -387,17 +410,28 @@ fun LXBIgnitionApp(
                 }
             }
         ) { innerPadding ->
-            when (selectedTab) {
-                0 -> ControlTab(
-                    viewModel = viewModel,
-                    modifier = Modifier.padding(innerPadding),
-                    onOpenConfig = { selectedTab = 2 },
-                    onOpenDeveloperOptionsSettings = onOpenDeveloperOptionsSettings,
-                    onOpenWirelessDebuggingSettings = onOpenWirelessDebuggingSettings
-                )
-                1 -> TasksTab(viewModel, Modifier.padding(innerPadding))
-                2 -> ConfigTab(viewModel, Modifier.padding(innerPadding))
-                3 -> LogsTab(viewModel, Modifier.padding(innerPadding))
+            // Batch 7: NavHost owns the top-level tab back stack.
+            // Tab clicks use popUpTo(CONTROL) + saveState/restoreState,
+            // so the stack holds at most the start destination plus the
+            // current tab: system Back from a non-home tab returns to
+            // Control, and from Control it exits the app as before.
+            // In-tab page stacks (Tasks/Control/Config) are untouched.
+            NavHost(
+                navController = navController,
+                startDestination = TopNavRoutes.CONTROL,
+                modifier = Modifier.padding(innerPadding)
+            ) {
+                composable(TopNavRoutes.CONTROL) {
+                    ControlTab(
+                        viewModel = viewModel,
+                        onOpenConfig = { navigateToTab(TopNavRoutes.CONFIG) },
+                        onOpenDeveloperOptionsSettings = onOpenDeveloperOptionsSettings,
+                        onOpenWirelessDebuggingSettings = onOpenWirelessDebuggingSettings
+                    )
+                }
+                composable(TopNavRoutes.TASKS) { TasksTab(viewModel) }
+                composable(TopNavRoutes.CONFIG) { ConfigTab(viewModel) }
+                composable(TopNavRoutes.LOGS) { LogsTab(viewModel) }
             }
         }
     }

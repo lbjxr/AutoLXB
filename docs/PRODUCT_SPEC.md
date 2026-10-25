@@ -251,3 +251,26 @@
 - 行尾：MainActivity.kt 混用 CRLF/LF 且带 BOM，编辑按行保留
   原行尾，未做全文件转换；两个新文件统一用 LF。
 - 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
+
+## 14. v0.9.0 第五批范围（已落地，开发中 beta；本批只做顶层 NavHost）
+
+- 顶层导航：`LXBIgnitionApp` 的底部 4 个 Tab 由 NavHost 驱动，
+  路由为 control（起点）/ tasks / config / logs，路由常量与
+  tab↔route 纯映射在 `ui/navigation/TopNavRoutes.kt`（配 JUnit
+  测试）。单个 Scaffold + 底部栏的壳不变；Tab 的选中态从
+  NavController 的当前返回栈项取，不再由 `selectedTab` Int
+  状态驱动；“打开配置”入口改为导航到 config 路由。
+- Tab 切换语义：标准底部导航写法，`popUpTo(CONTROL)` +
+  `saveState` / `launchSingleTop` / `restoreState`。返回栈里
+  最多只有起点 + 当前 Tab，因此系统返回键在非首页 Tab 时
+  回到 Control，从 Control 按返回则退出应用（与以前一致）。
+  切 Tab 后各 Tab 内部状态由 save/restore 保留。
+- 边界：各 Tab 内部的页面仍是第三、四批的状态栈（Tasks 8 页、
+  Control 3 页、Config 5 页），不是 NavHost 目的地；把它们
+  也迁入 NavHost 是后续项，本批不做，避免在没有编译兜底
+  时一次性替换全部导航。
+- 依赖：`androidx.navigation:navigation-compose:2.8.0`，与
+  Compose BOM 2024.09.00 同代；版本目录统一管理。
+- 版本保持 0.9.0 / versionCode 900 不变；本批之后
+  `release/v0.9.0` 分支从本批提交上冻结，见
+  `docs/RELEASE_v0.9.0.md`。

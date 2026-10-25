@@ -85,10 +85,37 @@
   4 处、`GlyphBadge` 18 处）；删了移动后仅剩的 3 个未用导入。
 - 版本保持 0.9.0 / versionCode 900 不变，本批不发版。
 
+### 第五批（本版新增，本批只做顶层 NavHost + 发版文档）
+
+- 顶层 4 个 Tab 接 NavHost：`LXBIgnitionApp` 里驱动底部栏的
+  `selectedTab` Int 状态，换成 `NavController` + `NavHost`，4 条
+  路由为 control / tasks / config / logs（路由常量与 tab↔route
+  纯映射抽到 `ui/navigation/TopNavRoutes.kt`，配 JUnit 测试）。
+  底部栏选中态从 `currentBackStackEntryAsState` 取；点 Tab 时用
+  标准底部导航写法（`popUpTo(CONTROL)` + `saveState` /
+  `launchSingleTop` / `restoreState`）；Control 与 Tasks 里“打开
+  配置”的入口改为导航到 config 路由，不再写 `selectedTab = 2`。
+  各 Tab 内部的页面返回栈（第三、四批）一律未动。
+- 行为变化（有意的，不是回归）：系统返回键在非首页 Tab 时，
+  现在按 NavHost 返回栈回到 Control（Tab 切换时先回到起点再
+  入栈，栈里最多只有起点 + 当前 Tab）；从 Control 按返回仍
+  直接退出应用，与以前一致。切 Tab 后各 Tab 内部状态由
+  `saveState` / `restoreState` 保留。
+- 依赖：新增 `androidx.navigation:navigation-compose:2.8.0`
+  （版本目录统一管理）。选型：2.8.0 是 2024 年 9 月同期版本，
+  与 Compose BOM 2024.09.00（Compose 1.7）与 Kotlin 2.0.21
+  同代；更新的 navigation 大版本要求更新的 Compose/Kotlin，
+  不在本批引入。
+- 发版文档：新增 `docs/RELEASE_v0.9.0.md`（照 v0.8.0 那份的
+  格式：本机打 APK + GitHub 网页建 Release 的步骤、未验证声明）。
+- 版本保持 0.9.0 / versionCode 900 不变；本批之后由维护者把
+  `release/v0.9.0` 分支从本批提交上冻结。
+
 ### 明确未做（本批有意不做，留待后续决策/验证）
 
-- 完整 NavHost 重构：没有编译器兜底时全量替换导航风险太大，
-  本批只做了可测试的栈逻辑 + 接线；NavHost 仍列为后续项。
+- 顶层 NavHost 已于第五批落地（只覆盖底部 4 个 Tab；各 Tab
+  内部仍是第三、四批的状态栈，不是 NavHost 目的地，见
+  `docs/PRODUCT_SPEC.md` §14）。
 - 表单未保存内容的草稿保存：第二批已定案——返回不弹二次确认
   框（字段在 ViewModel 中，返回不丢弃），只做纯展示的未保存
   提示；草稿持久化仍不引入，见 `docs/PRODUCT_SPEC.md` §11。
