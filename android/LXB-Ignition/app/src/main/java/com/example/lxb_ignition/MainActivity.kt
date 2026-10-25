@@ -126,6 +126,9 @@ import com.example.lxb_ignition.model.UnifiedLogEntry
 import com.example.lxb_ignition.model.TaskRuntimeUiStatus
 import com.example.lxb_ignition.model.WirelessBootstrapStatus
 import com.example.lxb_ignition.ui.theme.LXBIgnitionTheme
+import com.example.lxb_ignition.ui.validation.FormField
+import com.example.lxb_ignition.ui.validation.validateTemplateForm
+import com.example.lxb_ignition.ui.validation.validateWorkflowForm
 import com.example.lxb_ignition.ui.theme.AppError
 import com.example.lxb_ignition.ui.theme.AppErrorSoft
 import com.example.lxb_ignition.ui.theme.AppSuccess
@@ -950,7 +953,12 @@ private fun GlyphBadge(
 }
 
 @Composable
-private fun EmptyStateBox(title: String, detail: String) {
+private fun EmptyStateBox(
+    title: String,
+    detail: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -970,6 +978,48 @@ private fun EmptyStateBox(title: String, detail: String) {
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
         )
+        if (actionLabel != null && onAction != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onAction,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(actionLabel)
+            }
+        }
+    }
+}
+
+// Batch 2: dismissible in-page notice banner. Replaces the old Toast for
+// portable import/export results: a Toast disappears and cannot be
+// re-read, while this banner stays on the Tasks pages until the user
+// closes it or the next portable operation replaces it.
+@Composable
+private fun PortableNoticeBanner(message: String, onDismiss: () -> Unit) {
+    SurfacePanel(
+        modifier = Modifier.fillMaxWidth(),
+        background = MaterialTheme.colorScheme.primaryContainer,
+        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(tr("Close"))
+            }
+        }
     }
 }
 
@@ -2336,6 +2386,17 @@ private val ZhMap = mapOf(
     "No steps yet." to "暂无步骤。",
     "Add a template to start building this workflow." to "添加一个模板来开始编排这个工作流。",
     "Add step" to "添加步骤",
+    "New template" to "新建模板",
+    "New workflow" to "新建工作流",
+    "Add template" to "添加模板",
+    "Submit a quick task" to "提交快速任务",
+    "Delete configuration" to "删除配置",
+    "This configuration will be permanently deleted and cannot be recovered." to "该配置将被永久删除，无法恢复。",
+    "Template name is required." to "请填写模板名称。",
+    "Task description is required." to "请填写任务描述。",
+    "Target app is required." to "请选择目标应用。",
+    "Workflow name is required." to "请填写工作流名称。",
+    "Add at least one step." to "请至少添加一个步骤。",
     "Trigger" to "触发方式",
     "Choose whether this workflow runs manually only, on a schedule, or from notifications." to "选择这个工作流是仅手动执行，还是按定时或通知触发。",
     "No trigger" to "无触发条件",
@@ -2386,7 +2447,6 @@ private data class RouteEditorTarget(
 
 @Composable
 fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val tasks by viewModel.taskList.collectAsState()
     val taskMapDetail by viewModel.taskMapDetail.collectAsState()
     val taskMapDetailLoading by viewModel.taskMapDetailLoading.collectAsState()
@@ -2419,6 +2479,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var page by rememberSaveable { mutableIntStateOf(TASKS_PAGE_HOME) }
     var selectedTask by remember { mutableStateOf<TaskSummary?>(null) }
     var routeEditorTarget by remember { mutableStateOf<RouteEditorTarget?>(null) }
+    var portableNotice by remember { mutableStateOf<String?>(null) }
+    var templateAttemptedSave by remember { mutableStateOf(false) }
+    var workflowAttemptedSave by remember { mutableStateOf(false) }
     val portableImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -2445,7 +2508,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 
     LaunchedEffect(viewModel) {
         viewModel.portableOperationNotice.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            portableNotice = message
         }
     }
 
@@ -2488,6 +2551,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     }
                 )
 
+                if (portableNotice != null) {
+                    PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
                 TaskRuntimeStatusCard(
                     status = taskRuntime,
                     onStop = { viewModel.cancelCurrentTaskOnDevice() }
@@ -2522,11 +2588,15 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     primaryActionLabel = tr("New"),
                     onPrimaryAction = {
                         viewModel.resetTemplateForm()
+                        templateAttemptedSave = false
                         page = TASKS_PAGE_TEMPLATE_FORM
                     },
                     secondaryActionLabel = tr("Refresh"),
                     onSecondaryAction = { viewModel.refreshTemplateListOnDevice() }
                 )
+                if (portableNotice != null) {
+                    PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
                 SurfacePanel(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2537,7 +2607,13 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     if (templates.isEmpty()) {
                         EmptyStateBox(
                             title = tr("No templates yet."),
-                            detail = tr("Create a template before composing workflows.")
+                            detail = tr("Create a template before composing workflows."),
+                            actionLabel = tr("New template"),
+                            onAction = {
+                                viewModel.resetTemplateForm()
+                                templateAttemptedSave = false
+                                page = TASKS_PAGE_TEMPLATE_FORM
+                            }
                         )
                     } else {
                         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -2547,6 +2623,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     onRun = { viewModel.runTemplateOnDevice(template.templateId) },
                                     onEdit = {
                                         viewModel.loadTemplateForm(template)
+                                        templateAttemptedSave = false
                                         page = TASKS_PAGE_TEMPLATE_FORM
                                     },
                                     onRoute = {
@@ -2575,6 +2652,12 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 
         TASKS_PAGE_TEMPLATE_FORM -> {
             var showTemplateAppPicker by rememberSaveable { mutableStateOf(false) }
+            // Batch 2: errors appear only after the first Save tap; after that
+            // they are recomputed from the live field values on every edit.
+            val templateErrors = if (templateAttemptedSave) validateTemplateForm(templateName, templateDescription, templatePackage) else emptyList()
+            val templateNameError = templateErrors.firstOrNull { it.field == FormField.TEMPLATE_NAME }?.message
+            val templateDescriptionError = templateErrors.firstOrNull { it.field == FormField.TASK_DESCRIPTION }?.message
+            val templatePackageError = templateErrors.firstOrNull { it.field == FormField.TARGET_APP }?.message
             Column(
                 modifier = modifier
                     .fillMaxSize()
@@ -2586,33 +2669,60 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Template"),
                     subtitle = tr("Define one reusable task unit."),
                     glyph = "▣",
-                    onBack = { page = TASKS_PAGE_TEMPLATE_LIST },
+                    onBack = {
+                        templateAttemptedSave = false
+                        page = TASKS_PAGE_TEMPLATE_LIST
+                    },
                     primaryActionLabel = tr("Save"),
                     onPrimaryAction = {
-                        viewModel.saveTemplateOnDevice()
-                        page = TASKS_PAGE_TEMPLATE_LIST
+                        templateAttemptedSave = true
+                        if (validateTemplateForm(templateName, templateDescription, templatePackage).isEmpty()) {
+                            viewModel.saveTemplateOnDevice()
+                            templateAttemptedSave = false
+                            page = TASKS_PAGE_TEMPLATE_LIST
+                        }
                     },
                     secondaryActionLabel = tr("Export Template"),
                     onSecondaryAction = {
                         viewModel.exportPortableTemplateOnDevice(viewModel.templateId.value)
                     }
                 )
+                if (portableNotice != null) {
+                    PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
                 OutlinedTextField(
                     value = templateName,
                     onValueChange = { viewModel.templateName.value = it },
                     label = { Text(tr("Name")) },
+                    isError = templateNameError != null,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (templateNameError != null) {
+                    Text(
+                        text = tr(templateNameError),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 OutlinedTextField(
                     value = templateDescription,
                     onValueChange = { viewModel.templateDescription.value = it },
                     label = { Text(tr("Task description")) },
+                    isError = templateDescriptionError != null,
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (templateDescriptionError != null) {
+                    Text(
+                        text = tr(templateDescriptionError),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 PackageSelectField(
                     title = tr("Target app"),
                     selectedPackage = templatePackage,
+                    error = templatePackageError,
                     options = installedApps,
                     onOpen = {
                         if (installedApps.isEmpty()) {
@@ -2693,11 +2803,15 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     primaryActionLabel = tr("New"),
                     onPrimaryAction = {
                         viewModel.resetWorkflowForm()
+                        workflowAttemptedSave = false
                         page = TASKS_PAGE_WORKFLOW_FORM
                     },
                     secondaryActionLabel = tr("Refresh"),
                     onSecondaryAction = { viewModel.refreshWorkflowListOnDevice() }
                 )
+                if (portableNotice != null) {
+                    PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
                 SurfacePanel(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2708,7 +2822,13 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     if (workflows.isEmpty()) {
                         EmptyStateBox(
                             title = tr("No workflows yet."),
-                            detail = tr("Create a workflow from one or more templates.")
+                            detail = tr("Create a workflow from one or more templates."),
+                            actionLabel = tr("New workflow"),
+                            onAction = {
+                                viewModel.resetWorkflowForm()
+                                workflowAttemptedSave = false
+                                page = TASKS_PAGE_WORKFLOW_FORM
+                            }
                         )
                     } else {
                         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -2718,6 +2838,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                     onRun = { viewModel.runWorkflowOnDevice(workflow.workflowId) },
                                     onEdit = {
                                         viewModel.loadWorkflowForm(workflow)
+                                        workflowAttemptedSave = false
                                         page = TASKS_PAGE_WORKFLOW_FORM
                                     },
                                     onToggleEnabled = { checked -> viewModel.toggleWorkflowTriggerEnabledOnDevice(workflow, checked) },
@@ -2734,6 +2855,10 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         }
 
         TASKS_PAGE_WORKFLOW_FORM -> {
+            // Batch 2: same first-save-then-live rule as the template form.
+            val workflowErrors = if (workflowAttemptedSave) validateWorkflowForm(workflowName, workflowStepTemplateIds.size) else emptyList()
+            val workflowNameError = workflowErrors.firstOrNull { it.field == FormField.WORKFLOW_NAME }?.message
+            val workflowStepsError = workflowErrors.firstOrNull { it.field == FormField.WORKFLOW_STEPS }?.message
             Column(
                 modifier = modifier
                     .fillMaxSize()
@@ -2745,23 +2870,41 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Workflow"),
                     subtitle = tr("Select a template and optional trigger."),
                     glyph = "↳",
-                    onBack = { page = TASKS_PAGE_WORKFLOW_LIST },
+                    onBack = {
+                        workflowAttemptedSave = false
+                        page = TASKS_PAGE_WORKFLOW_LIST
+                    },
                     primaryActionLabel = tr("Save"),
                     onPrimaryAction = {
-                        viewModel.saveWorkflowOnDevice()
-                        page = TASKS_PAGE_WORKFLOW_LIST
+                        workflowAttemptedSave = true
+                        if (validateWorkflowForm(workflowName, workflowStepTemplateIds.size).isEmpty()) {
+                            viewModel.saveWorkflowOnDevice()
+                            workflowAttemptedSave = false
+                            page = TASKS_PAGE_WORKFLOW_LIST
+                        }
                     },
                     secondaryActionLabel = tr("Export Workflow"),
                     onSecondaryAction = {
                         viewModel.exportPortableWorkflowOnDevice(viewModel.workflowId.value)
                     }
                 )
+                if (portableNotice != null) {
+                    PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
                 OutlinedTextField(
                     value = workflowName,
                     onValueChange = { viewModel.workflowName.value = it },
                     label = { Text(tr("Name")) },
+                    isError = workflowNameError != null,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (workflowNameError != null) {
+                    Text(
+                        text = tr(workflowNameError),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 OutlinedTextField(
                     value = workflowPlaybook,
                     onValueChange = { viewModel.workflowPlaybook.value = it },
@@ -2774,10 +2917,19 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     title = tr("Steps"),
                     subtitle = tr("Add templates and arrange the order they should run.")
                 )
+                if (workflowStepsError != null) {
+                    Text(
+                        text = tr(workflowStepsError),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 if (workflowStepTemplateIds.isEmpty()) {
                     EmptyStateBox(
                         title = tr("No steps yet."),
-                        detail = tr("Add a template to start building this workflow.")
+                        detail = tr("Add a template to start building this workflow."),
+                        actionLabel = tr("Add template"),
+                        onAction = { page = TASKS_PAGE_TEMPLATE_PICKER }
                     )
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2790,6 +2942,7 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 onOpen = {
                                     template?.let {
                                         viewModel.loadTemplateForm(it)
+                                        templateAttemptedSave = false
                                         page = TASKS_PAGE_TEMPLATE_FORM
                                     }
                                 },
@@ -2909,6 +3062,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     primaryActionLabel = tr("Refresh"),
                     onPrimaryAction = { viewModel.refreshTaskListOnDevice() }
                 )
+                if (portableNotice != null) {
+                    PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
 
                 SummaryInfoStrip(
                     glyph = "☰",
@@ -2928,7 +3084,9 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     if (tasks.isEmpty()) {
                         EmptyStateBox(
                             title = tr("No runs yet."),
-                            detail = tr("Submit a quick task, or wait for a workflow trigger to fire.")
+                            detail = tr("Submit a quick task, or wait for a workflow trigger to fire."),
+                            actionLabel = tr("Submit a quick task"),
+                            onAction = { page = TASKS_PAGE_HOME }
                         )
                     } else {
                         LazyColumn(
@@ -4234,7 +4392,8 @@ private fun PackageSelectField(
     selectedPackage: String,
     options: List<AppPackageOption>,
     onOpen: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    error: String? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -4264,6 +4423,13 @@ private fun PackageSelectField(
             ) {
                 Text(tr("Clear"), fontSize = 12.sp)
             }
+        }
+        if (!error.isNullOrBlank()) {
+            Text(
+                text = tr(error),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
@@ -5836,6 +6002,7 @@ fun LlmConfigCard(viewModel: MainViewModel) {
     val llmProfileDraftName by viewModel.llmProfileDraftName.collectAsState()
     val llmProfiles by viewModel.llmProfiles.collectAsState()
     val activeLlmProfileId by viewModel.activeLlmProfileId.collectAsState()
+    var profilePendingDelete by remember { mutableStateOf<MainViewModel.LlmProfile?>(null) }
     val llmProfileResult by viewModel.llmProfileResult.collectAsState()
     val resolvedEndpoint = remember(llmBaseUrl, llmRequestType, llmModel) {
         runCatching { LlmClient.buildEndpointUrl(llmBaseUrl, llmRequestType, llmModel) }.getOrNull().orEmpty()
@@ -6097,7 +6264,7 @@ fun LlmConfigCard(viewModel: MainViewModel) {
                                         Text(tr("Use this config"))
                                     }
                                     OutlinedButton(
-                                        onClick = { viewModel.deleteLlmProfile(profile.id) },
+                                        onClick = { profilePendingDelete = profile },
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Text(tr("Delete"))
@@ -6108,6 +6275,16 @@ fun LlmConfigCard(viewModel: MainViewModel) {
                     }
                 }
             }
+        }
+        val pendingDelete = profilePendingDelete
+        if (pendingDelete != null) {
+            DeleteConfirmDialog(
+                itemName = pendingDelete.name,
+                title = tr("Delete configuration"),
+                warning = tr("This configuration will be permanently deleted and cannot be recovered."),
+                onConfirm = { viewModel.deleteLlmProfile(pendingDelete.id) },
+                onDismiss = { profilePendingDelete = null }
+            )
         }
     }
 }
