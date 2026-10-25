@@ -127,6 +127,7 @@ import com.example.lxb_ignition.model.UnifiedLogEntry
 import com.example.lxb_ignition.model.TaskRuntimeUiStatus
 import com.example.lxb_ignition.model.WirelessBootstrapStatus
 import com.example.lxb_ignition.ui.navigation.TaskNavStack
+import com.example.lxb_ignition.ui.navigation.AppNavStack
 import com.example.lxb_ignition.ui.theme.LXBIgnitionTheme
 import com.example.lxb_ignition.ui.validation.FormField
 import com.example.lxb_ignition.ui.validation.validateTemplateForm
@@ -454,12 +455,19 @@ fun ControlTab(
     val wirelessDebuggingEnabled by viewModel.wirelessDebuggingEnabled.collectAsState()
     val rootAvailable by viewModel.rootAvailable.collectAsState()
     val rootDetail by viewModel.rootDetail.collectAsState()
-    var page by rememberSaveable { mutableIntStateOf(CONTROL_PAGE_OVERVIEW) }
+    var controlNavPages by rememberSaveable { mutableStateOf(listOf(CONTROL_PAGE_OVERVIEW)) }
+    // Batch 4: Control back stack, same pattern as Tasks (batch 3). `page`
+    // is derived from the stack top; forward moves push, Back pops. Depth
+    // is 1 (overview -> one guide), so no popTo/reset helpers are needed.
+    val controlNav = AppNavStack(controlNavPages)
+    val page = controlNav.current
+    fun goToControlPage(target: Int) { controlNavPages = controlNav.push(target).pages }
+    fun goBackControlPage() { controlNavPages = controlNav.pop(CONTROL_PAGE_OVERVIEW).pages }
     var showStopPairingDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(wireless.state) {
         if (wireless.state == "STOP_PAIRING_REQUIRED") {
-            page = CONTROL_PAGE_WIRELESS_GUIDE
+            goToControlPage(CONTROL_PAGE_WIRELESS_GUIDE)
             showStopPairingDialog = true
         }
     }
@@ -491,12 +499,19 @@ fun ControlTab(
         )
     }
 
+    // Batch 4: system Back pops the Control stack. At the overview this
+    // handler is disabled, so Back keeps its old behaviour. The pairing
+    // dialog above consumes Back itself when it is open.
+    BackHandler(enabled = controlNav.canGoBack(CONTROL_PAGE_OVERVIEW)) {
+        controlNavPages = controlNav.pop(CONTROL_PAGE_OVERVIEW).pages
+    }
+
     when (page) {
         CONTROL_PAGE_OVERVIEW -> ControlOverviewPage(
             modifier = modifier,
             coreRuntime = coreRuntime,
-            onOpenWirelessGuide = { page = CONTROL_PAGE_WIRELESS_GUIDE },
-            onOpenRootGuide = { page = CONTROL_PAGE_ROOT_GUIDE },
+            onOpenWirelessGuide = { goToControlPage(CONTROL_PAGE_WIRELESS_GUIDE) },
+            onOpenRootGuide = { goToControlPage(CONTROL_PAGE_ROOT_GUIDE) },
             onStop = { viewModel.stopServerProcess() },
             onRefreshState = { viewModel.refreshCoreRuntimeStatusNow() },
             onOpenConfig = onOpenConfig
@@ -504,7 +519,7 @@ fun ControlTab(
         CONTROL_PAGE_WIRELESS_GUIDE -> SingleConfigPage(
             title = tr("Wireless ADB startup"),
             modifier = modifier,
-            onBack = { page = CONTROL_PAGE_OVERVIEW }
+            onBack = { goBackControlPage() }
         ) {
             WirelessGuidePage(
                 status = wireless,
@@ -524,7 +539,7 @@ fun ControlTab(
         CONTROL_PAGE_ROOT_GUIDE -> SingleConfigPage(
             title = tr("Root startup"),
             modifier = modifier,
-            onBack = { page = CONTROL_PAGE_OVERVIEW }
+            onBack = { goBackControlPage() }
         ) {
             RootStartGuidePage(
                 rootAvailable = rootAvailable,
@@ -2454,6 +2469,10 @@ private val ZhMap = mapOf(
     "None" to "手动",
     "Schedule" to "定时触发",
     "PENDING" to "等待中",
+    // Batch 4 (v0.9.0): unsaved-changes indicator for the template and
+    // workflow forms. Display-only: leaving a form does not discard edits,
+    // because the fields live in ViewModel StateFlows.
+    "Unsaved changes. Your edits are kept in this form until you save." to "有未保存的更改。返回后仍可继续编辑，点保存后才会生效。",
 )
 
 private data class RouteEditorTarget(
@@ -2464,6 +2483,33 @@ private data class RouteEditorTarget(
     val userTask: String = "",
     val userPlaybook: String = "",
     val mode: String = ""
+)
+
+private data class TemplateFormSnapshot(
+    val name: String,
+    val description: String,
+    val packageName: String,
+    val playbook: String,
+    val decomposeEnabled: Boolean,
+    val taskMapMode: String
+)
+
+private data class WorkflowFormSnapshot(
+    val name: String,
+    val playbook: String,
+    val stepTemplateIds: List<String>,
+    val triggerType: String,
+    val runAtMs: String,
+    val repeatMode: String,
+    val repeatWeekdays: Int,
+    val triggerPackage: String,
+    val titlePattern: String,
+    val bodyPattern: String,
+    val cooldownSeconds: String,
+    val activeTimeStart: String,
+    val activeTimeEnd: String,
+    val llmConditionEnabled: Boolean,
+    val llmCondition: String
 )
 
 // Tab 2: Tasks
@@ -2515,6 +2561,25 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var portableNotice by remember { mutableStateOf<String?>(null) }
     var templateAttemptedSave by remember { mutableStateOf(false) }
     var workflowAttemptedSave by remember { mutableStateOf(false) }
+    // Batch 4: unsaved-changes snapshots. Form fields live in ViewModel
+    // StateFlows, so leaving a form does NOT discard them (verified
+    // premise, see PRODUCT_SPEC.md section 11) -- hence no leave-confirm
+    // dialog. The snapshot is taken on entering a form page and compared
+    // with the live fields; it is NOT retaken when returning from the
+    // route editor (template) or from the template picker / template form
+    // (workflow), so edits made before those detours stay flagged.
+    var templateFormSnapshot by remember { mutableStateOf<TemplateFormSnapshot?>(null) }
+    var workflowFormSnapshot by remember { mutableStateOf<WorkflowFormSnapshot?>(null) }
+    var tasksPreviousPage by remember { mutableStateOf(TASKS_PAGE_HOME) }
+    LaunchedEffect(page) {
+        if (page == TASKS_PAGE_TEMPLATE_FORM && tasksPreviousPage != TASKS_PAGE_ROUTE_EDITOR) {
+            templateFormSnapshot = TemplateFormSnapshot(templateName, templateDescription, templatePackage, templatePlaybook, templateDecomposeEnabled, templateTaskMapMode)
+        }
+        if (page == TASKS_PAGE_WORKFLOW_FORM && tasksPreviousPage != TASKS_PAGE_TEMPLATE_PICKER && tasksPreviousPage != TASKS_PAGE_TEMPLATE_FORM) {
+            workflowFormSnapshot = WorkflowFormSnapshot(workflowName, workflowPlaybook, workflowStepTemplateIds, workflowTriggerType, workflowRunAtMs, workflowRepeatMode, workflowRepeatWeekdays, workflowTriggerPackage, workflowNotifyTitlePattern, workflowNotifyBodyPattern, workflowNotifyCooldownSeconds, workflowNotifyActiveTimeStart, workflowNotifyActiveTimeEnd, workflowNotifyLlmConditionEnabled, workflowNotifyLlmCondition)
+        }
+        tasksPreviousPage = page
+    }
     val portableImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -2698,6 +2763,10 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             // they are recomputed from the live field values on every edit.
             val templateErrors = if (templateAttemptedSave) validateTemplateForm(templateName, templateDescription, templatePackage) else emptyList()
             val templateNameError = templateErrors.firstOrNull { it.field == FormField.TEMPLATE_NAME }?.message
+            // Batch 4: display-only unsaved-changes indicator (see above).
+            val templateHasUnsavedChanges = templateFormSnapshot?.let {
+                it != TemplateFormSnapshot(templateName, templateDescription, templatePackage, templatePlaybook, templateDecomposeEnabled, templateTaskMapMode)
+            } ?: false
             val templateDescriptionError = templateErrors.firstOrNull { it.field == FormField.TASK_DESCRIPTION }?.message
             val templatePackageError = templateErrors.firstOrNull { it.field == FormField.TARGET_APP }?.message
             Column(
@@ -2731,6 +2800,13 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 )
                 if (portableNotice != null) {
                     PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
+                if (templateHasUnsavedChanges) {
+                    Text(
+                        text = tr("Unsaved changes. Your edits are kept in this form until you save."),
+                        fontSize = 12.sp,
+                        color = AppWarning
+                    )
                 }
                 OutlinedTextField(
                     value = templateName,
@@ -2900,6 +2976,10 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             // Batch 2: same first-save-then-live rule as the template form.
             val workflowErrors = if (workflowAttemptedSave) validateWorkflowForm(workflowName, workflowStepTemplateIds.size) else emptyList()
             val workflowNameError = workflowErrors.firstOrNull { it.field == FormField.WORKFLOW_NAME }?.message
+            // Batch 4: display-only unsaved-changes indicator (see above).
+            val workflowHasUnsavedChanges = workflowFormSnapshot?.let {
+                it != WorkflowFormSnapshot(workflowName, workflowPlaybook, workflowStepTemplateIds, workflowTriggerType, workflowRunAtMs, workflowRepeatMode, workflowRepeatWeekdays, workflowTriggerPackage, workflowNotifyTitlePattern, workflowNotifyBodyPattern, workflowNotifyCooldownSeconds, workflowNotifyActiveTimeStart, workflowNotifyActiveTimeEnd, workflowNotifyLlmConditionEnabled, workflowNotifyLlmCondition)
+            } ?: false
             val workflowStepsError = workflowErrors.firstOrNull { it.field == FormField.WORKFLOW_STEPS }?.message
             Column(
                 modifier = modifier
@@ -2932,6 +3012,13 @@ fun TasksTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 )
                 if (portableNotice != null) {
                     PortableNoticeBanner(message = portableNotice!!, onDismiss = { portableNotice = null })
+                }
+                if (workflowHasUnsavedChanges) {
+                    Text(
+                        text = tr("Unsaved changes. Your edits are kept in this form until you save."),
+                        fontSize = 12.sp,
+                        color = AppWarning
+                    )
                 }
                 OutlinedTextField(
                     value = workflowName,
@@ -4876,24 +4963,36 @@ fun UnifiedStopCard(
 
 @Composable
 fun ConfigTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
-    // simple in-tab navigation (see CONFIG_PAGE_* constants above)
-    var page by rememberSaveable { mutableIntStateOf(CONFIG_PAGE_OVERVIEW) }
+    // Batch 4: Config back stack, same pattern as Tasks (batch 3) and
+    // Control (this batch). Depth is 1 (overview -> one sub-page).
+    var configNavPages by rememberSaveable { mutableStateOf(listOf(CONFIG_PAGE_OVERVIEW)) }
+    val configNav = AppNavStack(configNavPages)
+    val page = configNav.current
+    fun goToConfigPage(target: Int) { configNavPages = configNav.push(target).pages }
+    fun goBackConfigPage() { configNavPages = configNav.pop(CONFIG_PAGE_OVERVIEW).pages }
+
+    // Batch 4: system Back pops the Config stack. At the overview this
+    // handler is disabled, so Back keeps its old behaviour. Dialogs inside
+    // the sub-pages (e.g. the LLM delete confirm) consume Back themselves.
+    BackHandler(enabled = configNav.canGoBack(CONFIG_PAGE_OVERVIEW)) {
+        configNavPages = configNav.pop(CONFIG_PAGE_OVERVIEW).pages
+    }
 
     when (page) {
         CONFIG_PAGE_OVERVIEW -> ConfigOverviewPage(
             modifier = modifier,
             viewModel = viewModel,
-            onOpenDeviceCore = { page = CONFIG_PAGE_DEVICE_CORE },
-            onOpenLlm = { page = CONFIG_PAGE_LLM },
-            onOpenUnlockPolicy = { page = CONFIG_PAGE_UNLOCK_POLICY },
-            onOpenMapSync = { page = CONFIG_PAGE_MAP_SYNC }
+            onOpenDeviceCore = { goToConfigPage(CONFIG_PAGE_DEVICE_CORE) },
+            onOpenLlm = { goToConfigPage(CONFIG_PAGE_LLM) },
+            onOpenUnlockPolicy = { goToConfigPage(CONFIG_PAGE_UNLOCK_POLICY) },
+            onOpenMapSync = { goToConfigPage(CONFIG_PAGE_MAP_SYNC) }
         )
         CONFIG_PAGE_DEVICE_CORE -> SingleConfigPage(
             title = tr("Control mode config"),
             subtitle = tr("Choose how touch, typing, and task-time phone behavior should work on this device."),
             glyph = "⌁",
             modifier = modifier,
-            onBack = { page = CONFIG_PAGE_OVERVIEW }
+            onBack = { goBackConfigPage() }
         ) {
             LxbCoreConfigCard(viewModel)
         }
@@ -4902,7 +5001,7 @@ fun ConfigTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             subtitle = tr("Set the model endpoint used for device-side planning and visual understanding."),
             glyph = "✦",
             modifier = modifier,
-            onBack = { page = CONFIG_PAGE_OVERVIEW }
+            onBack = { goBackConfigPage() }
         ) {
             LlmConfigCard(viewModel)
         }
@@ -4911,7 +5010,7 @@ fun ConfigTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             subtitle = tr("Control how the phone is unlocked before a task and locked again afterward."),
             glyph = "🔐",
             modifier = modifier,
-            onBack = { page = CONFIG_PAGE_OVERVIEW }
+            onBack = { goBackConfigPage() }
         ) {
             UnlockPolicyConfigCard(viewModel)
         }
@@ -4920,7 +5019,7 @@ fun ConfigTab(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             subtitle = tr("Manage route assets, active map lane, and pull-by-identifier actions."),
             glyph = "➜",
             modifier = modifier,
-            onBack = { page = CONFIG_PAGE_OVERVIEW }
+            onBack = { goBackConfigPage() }
         ) {
             MapSyncConfigCard(viewModel)
         }

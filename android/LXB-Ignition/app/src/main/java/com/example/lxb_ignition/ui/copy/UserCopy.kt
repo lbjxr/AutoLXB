@@ -48,6 +48,41 @@ object UserCopy {
             "Task failed." -> return if (zh) "任务失败。" else "Task failed."
         }
 
+        // --- Batch 4: common failures, "what happened + what to do" ---
+        // Only strings that really occur in MainViewModel / TraceEventMapper
+        // are mapped here; no error codes are invented. These run before
+        // the prefixed handlers below (and before UiMessageLocalizer's own
+        // table, which UserCopy feeds first), so the actionable wording
+        // replaces the bare "failed: detail" translations for these cases.
+        when (text) {
+            "Server is not running, please start the service first." ->
+                return if (zh) "服务未运行，请先在首页启动核心服务。" else "Service is not running. Start the core service on the home page first."
+            "lxb-core is not running, please start the service on the home tab." ->
+                return if (zh) "核心服务未运行，请先在首页启动核心服务。" else "Core service is not running. Start it on the home page first."
+            "Vision action output was invalid, stopping this task." ->
+                return if (zh) "视觉动作输出无效，已停止任务。请检查模型配置后重试。" else "Vision action output was invalid, so the task was stopped. Check the model configuration and retry."
+            "Repeated ineffective actions detected, stopping to avoid loop." ->
+                return if (zh) "检测到重复无效动作，已停止以避免循环。请调整任务描述后重试。" else "Repeated ineffective actions detected, so the task was stopped to avoid a loop. Adjust the task description and retry."
+        }
+        if (text.startsWith("Vision output parse failed")) {
+            val suffix = text.removePrefix("Vision output parse failed")
+            return (if (zh) "视觉输出解析失败" else "Vision output parse failed") + suffix +
+                (if (zh) "。请检查模型配置后重试。" else ". Check the model configuration and retry.")
+        }
+        fun failedWithAdvice(prefix: String, zhLabel: String, enLabel: String, zhAdvice: String, enAdvice: String): String? {
+            if (!text.startsWith(prefix)) return null
+            val rest = text.removePrefix(prefix)
+            return (if (zh) zhLabel else enLabel) + rest + (if (zh) zhAdvice else enAdvice)
+        }
+        failedWithAdvice("Planner call failed: ", "模型规划调用失败：", "Planner call failed: ",
+            "。请检查模型配置与网络后重试。", ". Check the model configuration and network, then retry.")?.let { return it }
+        failedWithAdvice("Wireless bootstrap action failed: ", "无线启动失败：", "Wireless bootstrap action failed: ",
+            "。请检查无线调试与配对后重试。", ". Check wireless debugging and pairing, then retry.")?.let { return it }
+        failedWithAdvice("Task submission failed: ", "任务提交失败：", "Task submission failed: ",
+            "。请检查核心服务是否已启动后重试。", ". Check that the core service is running, then retry.")?.let { return it }
+        failedWithAdvice("Failed to sync ", "同步配置失败：", "Failed to sync ",
+            "。请检查网络与核心服务后重试。", ". Check the network and the core service, then retry.")?.let { return it }
+
         // --- prefixed messages: keep the trailing detail, drop the code ---
         fun prefixed(prefix: String, zhLabel: String, enLabel: String): String? {
             if (!text.startsWith(prefix)) return null

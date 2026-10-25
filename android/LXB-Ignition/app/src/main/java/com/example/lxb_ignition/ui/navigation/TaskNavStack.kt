@@ -69,3 +69,8 @@ class TaskNavStack(val pages: List<Int>) {
             if (page == home) root(home) else TaskNavStack(listOf(home, page))
     }
 }
+
+// Batch 4: generic alias for the same pure stack logic. TasksTab keeps the
+// TaskNavStack name (batch 3, already verified); ControlTab and ConfigTab
+// use AppNavStack so the shared stack is not named after one tab.
+typealias AppNavStack = TaskNavStack
